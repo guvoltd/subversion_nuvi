@@ -1,0 +1,339 @@
+/*
+ * opt-test.c -- test the option functions
+ *
+ * ====================================================================
+ *    Licensed to the Apache Software Foundation (ASF) under one
+ *    or more contributor license agreements.  See the NOTICE file
+ *    distributed with this work for additional information
+ *    regarding copyright ownership.  The ASF licenses this file
+ *    to you under the Apache License, Version 2.0 (the
+ *    "License"); you may not use this file except in compliance
+ *    with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing,
+ *    software distributed under the License is distributed on an
+ *    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *    KIND, either express or implied.  See the License for the
+ *    specific language governing permissions and limitations
+ *    under the License.
+ * ====================================================================
+ */
+
+#include <string.h>
+#include <apr_general.h>
+
+#include "../svn_test.h"
+
+#include "svn_opt.h"
+#include "svn_hash.h"
+#include "private/svn_opt_private.h"
+
+
+static svn_error_t *
+test_parse_peg_rev(apr_pool_t *pool)
+{
+  apr_size_t i;
+  static struct {
+      const char *input;
+      const char *path; /* NULL means an error is expected. */
+      svn_opt_revision_t peg;
+  } const tests[] = {
+    { "foo/bar",              "foo/bar",      {svn_opt_revision_unspecified} },
+    { "foo/bar@13",           "foo/bar",      {svn_opt_revision_number, {13}} },
+    { "foo/bar@HEAD",         "foo/bar",      {svn_opt_revision_head} },
+    { "foo/bar@{1999-12-31}", "foo/bar",      {svn_opt_revision_date, {0}} },
+    { "http://a/b@27",        "http://a/b",   {svn_opt_revision_number, {27}} },
+    { "http://a/b@COMMITTED", "http://a/b",   {svn_opt_revision_committed} },
+    { "http://a/b@{1999-12-31}",    "http://a/b",{svn_opt_revision_date, {0}} },
+    { "http://a/b@%7B1999-12-31%7D","http://a/b",{svn_opt_revision_date, {0}} },
+    { "foo/bar@1:2",          NULL,           {-1} },
+    { "foo/bar@baz",          NULL,           {-1} },
+    { "foo/bar@",             "foo/bar",      {svn_opt_revision_unspecified} },
+    { "foo/@bar@",            "foo/@bar",     {svn_opt_revision_unspecified} },
+    { "foo/bar/@13",          "foo/bar/",     {svn_opt_revision_number, {13}} },
+    { "foo/bar@@13",          "foo/bar@",     {svn_opt_revision_number, {13}} },
+    { "foo/@bar@HEAD",        "foo/@bar",     {svn_opt_revision_head} },
+    { "foo@/bar",             "foo@/bar",     {svn_opt_revision_unspecified} },
+    { "foo@HEAD/bar",         "foo@HEAD/bar", {svn_opt_revision_unspecified} },
+    { "@foo/bar",             "@foo/bar",     {svn_opt_revision_unspecified} },
+    { "@foo/bar@",            "@foo/bar",     {svn_opt_revision_unspecified} },
+  };
+
+  for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
+    {
+      const char *path;
+      svn_opt_revision_t peg;
+      svn_error_t *err;
+
+      err = svn_opt_parse_path(&peg, &path, tests[i].input, pool);
+      if (err)
+        {
+          svn_error_clear(err);
+          if (tests[i].path)
+            {
+              return svn_error_createf
+                (SVN_ERR_TEST_FAILED, NULL,
+                 "svn_opt_parse_path ('%s') returned an error instead of '%s'",
+                 tests[i].input, tests[i].path);
+            }
+        }
+      else
+        {
+          if ((path == NULL)
+              || (tests[i].path == NULL)
+              || (strcmp(path, tests[i].path) != 0)
+              || (peg.kind != tests[i].peg.kind)
+              || (peg.kind == svn_opt_revision_number && peg.value.number != tests[i].peg.value.number))
+            return svn_error_createf
+              (SVN_ERR_TEST_FAILED, NULL,
+               "svn_opt_parse_path ('%s') returned '%s' instead of '%s'", tests[i].input,
+               path ? path : "NULL", tests[i].path ? tests[i].path : "NULL");
+        }
+    }
+
+  return SVN_NO_ERROR;
+}
+
+static svn_error_t *
+test_svn_opt_args_to_target_array2(apr_pool_t *pool)
+{
+  apr_size_t i;
+  static struct {
+    const char *input;
+    const char *output; /* NULL means an error is expected. */
+  } const tests[] = {
+    { ".",                      "" },
+    { ".@BASE",                 "@BASE" },
+    { "foo///bar",              "foo/bar" },
+    { "foo///bar@13",           "foo/bar@13" },
+    { "foo///bar@HEAD",         "foo/bar@HEAD" },
+    { "foo///bar@{1999-12-31}", "foo/bar@{1999-12-31}" },
+    { "http://a//b////",        "http://a/b" },
+    { "http://a///b@27",        "http://a/b@27" },
+    { "http://a/b//@COMMITTED", "http://a/b@COMMITTED" },
+    { "foo///bar@1:2",          "foo/bar@1:2" },
+    { "foo///bar@baz",          "foo/bar@baz" },
+    { "foo///bar@",             "foo/bar@" },
+    { "foo///bar///@13",        "foo/bar@13" },
+    { "foo///bar@@13",          "foo/bar@@13" },
+    { "foo///@bar@HEAD",        "foo/@bar@HEAD" },
+    { "foo@///bar",             "foo@/bar" },
+    { "foo@HEAD///bar",         "foo@HEAD/bar" },
+  };
+
+  for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
+    {
+      const char *input = tests[i].input;
+      const char *expected_output = tests[i].output;
+      apr_array_header_t *targets;
+      apr_getopt_t *os;
+      const int argc = 2;
+      const char *argv[3] = { 0 };
+      apr_status_t apr_err;
+      svn_error_t *err;
+
+      argv[0] = "opt-test";
+      argv[1] = input;
+      argv[2] = NULL;
+
+      apr_err = apr_getopt_init(&os, pool, argc, argv);
+      if (apr_err)
+        return svn_error_wrap_apr(apr_err,
+                                  "Error initializing command line arguments");
+
+      err = svn_opt_args_to_target_array2(&targets, os, NULL, pool);
+
+      if (expected_output)
+        {
+          const char *actual_output;
+
+          if (err)
+            return err;
+          if (argc - 1 != targets->nelts)
+            return svn_error_createf(SVN_ERR_TEST_FAILED, NULL,
+                                     "Passed %d target(s) to "
+                                     "svn_opt_args_to_target_array2() but "
+                                     "got %d back.",
+                                     argc - 1,
+                                     targets->nelts);
+
+          actual_output = APR_ARRAY_IDX(targets, 0, const char *);
+
+          if (! svn_path_is_canonical(actual_output, pool))
+            return svn_error_createf(SVN_ERR_TEST_FAILED, NULL,
+                                     "Input '%s' to "
+                                     "svn_opt_args_to_target_array2() should "
+                                     "have returned a canonical path but "
+                                     "'%s' is not.",
+                                     input,
+                                     actual_output);
+
+          if (strcmp(expected_output, actual_output) != 0)
+            return svn_error_createf(SVN_ERR_TEST_FAILED, NULL,
+                                     "Input '%s' to "
+                                     "svn_opt_args_to_target_array2() should "
+                                     "have returned '%s' but returned '%s'.",
+                                     input,
+                                     expected_output,
+                                     actual_output);
+        }
+      else
+        {
+          if (! err)
+            return svn_error_createf(SVN_ERR_TEST_FAILED, NULL,
+                                     "Unexpected success in passing '%s' "
+                                     "to svn_opt_args_to_target_array2().",
+                                     input);
+        }
+    }
+
+  return SVN_NO_ERROR;
+}
+
+static const char *
+revision_ranges_to_string(apr_array_header_t *ranges,
+                          apr_pool_t *result_pool,
+                          apr_pool_t *scratch_pool)
+{
+  svn_stringbuf_t *result = svn_stringbuf_create_empty(result_pool);
+  int i;
+
+  for (i = 0; i < ranges->nelts; i++)
+    {
+      svn_opt_revision_range_t *range =
+        APR_ARRAY_IDX(ranges, i, svn_opt_revision_range_t *);
+
+      if (i > 0)
+        {
+          svn_stringbuf_appendcstr(result, ",");
+        }
+
+      svn_stringbuf_appendcstr(result,
+                               svn_opt__revision_to_string(&range->start,
+                                                           scratch_pool));
+      svn_stringbuf_appendcstr(result, ":");
+
+      svn_stringbuf_appendcstr(result,
+                               svn_opt__revision_to_string(&range->end,
+                                                           scratch_pool));
+    }
+
+  return result->data;
+}
+
+static svn_error_t*
+test_svn_opt_parse_change_to_range(apr_pool_t *pool)
+{
+  int i;
+  static struct {
+    const char *input;
+    const int expected_rv;
+    const char *expected_range;
+  } const tests[] = {
+    { "123", 0, "122:123"},
+    { "r123", 0, "122:123"},
+    { "-123", 0, "123:122"},
+    { "-r123", 0, "123:122"},
+    { "r-123", 0, "123:122"},
+    { "--123", -1, ""},
+    { "-r-123", -1, ""},
+    { "123-456", 0, "122:456"},
+    { "r123-r456", 0, "122:456"},
+    { "--r123", -1, ""},
+    { "123--456", -1, ""},
+    { "1-0", -1, ""},
+    { "0-1", -1, ""},
+  };
+
+  for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++)
+    {
+      apr_array_header_t *ranges =
+        apr_array_make(pool, 0, sizeof(svn_opt_revision_range_t *));
+
+      SVN_TEST_INT_ASSERT(
+        svn_opt_parse_change_to_range(ranges, tests[i].input, pool),
+        tests[i].expected_rv);
+
+      SVN_TEST_STRING_ASSERT(
+        revision_ranges_to_string(ranges, pool, pool),
+        tests[i].expected_range);
+  }
+
+  return SVN_NO_ERROR;
+}
+
+static svn_error_t *
+test_parse_one_rev(apr_pool_t *pool)
+{
+  {
+    svn_opt_revision_t rev = { 0 };
+    SVN_ERR(svn_opt_parse_one_revision(&rev, "r123", pool));
+    SVN_TEST_INT_ASSERT(rev.kind, svn_opt_revision_number);
+    SVN_TEST_INT_ASSERT(rev.value.number, 123);
+  }
+
+  {
+    svn_opt_revision_t rev = { 0 };
+    SVN_TEST_ASSERT_ERROR(svn_opt_parse_one_revision(&rev, "bad", pool),
+                          SVN_ERR_OPT_REVISION_PARSE_ERROR);
+  }
+
+  {
+    svn_opt_revision_t rev = { 0 };
+    SVN_TEST_ASSERT_ERROR(svn_opt_parse_one_revision(&rev, "r123bad", pool),
+                          SVN_ERR_OPT_REVISION_PARSE_ERROR);
+  }
+
+  return SVN_NO_ERROR;
+}
+
+static svn_error_t *
+test_svn_opt_parse_revprop(apr_pool_t *pool)
+{
+#define UNICODE_TEST_STRING "\xf0\x9f\x91\x89\xf0\x9f\x91\x88"
+
+  apr_hash_t *hash = apr_hash_make(pool);
+  svn_string_t *val;
+
+  apr_hash_clear(hash);
+  SVN_ERR(svn_opt_parse_revprop2(&hash, "name=val", pool));
+  val = apr_hash_get(hash, "name", APR_HASH_KEY_STRING);
+  SVN_TEST_STRING_ASSERT(val->data, "val");
+
+  apr_hash_clear(hash);
+  SVN_ERR(svn_opt_parse_revprop2(&hash, "name=val", pool));
+  val = apr_hash_get(hash, "name", APR_HASH_KEY_STRING);
+  SVN_TEST_STRING_ASSERT(val->data, "val");
+
+  apr_hash_clear(hash);
+  SVN_ERR(svn_opt_parse_revprop2(&hash, "name=" UNICODE_TEST_STRING, pool));
+  val = apr_hash_get(hash, "name", APR_HASH_KEY_STRING);
+  SVN_TEST_STRING_ASSERT(val->data, UNICODE_TEST_STRING);
+
+  return SVN_NO_ERROR;
+}
+
+
+/* The test table.  */
+
+static int max_threads = 1;
+
+static struct svn_test_descriptor_t test_funcs[] =
+  {
+    SVN_TEST_NULL,
+    SVN_TEST_PASS2(test_parse_peg_rev,
+                   "test svn_opt_parse_path"),
+    SVN_TEST_PASS2(test_svn_opt_args_to_target_array2,
+                   "test svn_opt_args_to_target_array2"),
+    SVN_TEST_PASS2(test_svn_opt_parse_change_to_range,
+                   "test svn_opt_parse_change_to_range"),
+    SVN_TEST_PASS2(test_parse_one_rev,
+                   "test svn_opt_parse_one_revision"),
+    SVN_TEST_PASS2(test_svn_opt_parse_revprop,
+                   "test test_svn_opt_parse_revprop"),
+    SVN_TEST_NULL
+  };
+
+SVN_TEST_MAIN

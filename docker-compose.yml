@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  subversion-nuvi:
+    build:
+      context: ../..
+      dockerfile: packaging/docker/Dockerfile
+    image: nuvi/subversion-server:latest
+    container_name: nuvi-subversion-server
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    ports:
+      - "${NUVI_SVN_PORT:-80}:80"         # Apache mod_dav_svn HTTP Subversion endpoint
+      - "${NUVI_PORT:-8000}:8000"         # Nuvi Web Administration Console & REST API
+    volumes:
+      - nuvi-data:/var/nuvi
+      - nuvi-logs:/var/log/nuvi
+    environment:
+      - NUVI_SERVER_NAME=${NUVI_SERVER_NAME:-Nuvi-Enterprise-SVN}
+      - NUVI_ENV=${NUVI_ENV:-production}
+      - NUVI_LOG_LEVEL=${NUVI_LOG_LEVEL:-INFO}
+      - NUVI_DATA_DIR=/var/nuvi
+      - NUVI_LOGS_DIR=/var/log/nuvi
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nuvi-data:
+    name: nuvi_storage_data
+  nuvi-logs:
+    name: nuvi_server_logs

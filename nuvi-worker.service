@@ -1,0 +1,33 @@
+[Unit]
+Description=Subversion Nuvi - Background Worker Daemon (Backups, Verify, Indexer)
+Documentation=https://github.com/nuvi/subversion-nuvi
+After=network.target local-fs.target nuvi-api.service
+Requires=nuvi-api.service
+
+[Service]
+Type=simple
+User=subversion
+Group=subversion
+WorkingDirectory=/opt/nuvi
+EnvironmentFile=-/etc/nuvi/nuvi.env
+EnvironmentFile=-/opt/nuvi/.env
+Environment="PATH=/opt/nuvi/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/nuvi"
+Environment="NUVI_ENV=production"
+ExecStart=/opt/nuvi/venv/bin/python3 -m backend.api.worker
+Restart=always
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/nuvi/data /var/log/nuvi
+PrivateTmp=true
+ProtectHome=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

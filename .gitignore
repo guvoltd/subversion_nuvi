@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.pytest_cache/
+
+# Data and SQLite databases
+data/db/*.sqlite3*
+data/repositories/*
+!data/repositories/.gitkeep
+data/backups/*
+!data/backups/.gitkeep
+
+# C++ Build artifacts
+backend/core/build/
+*.so
+*.o
+*.a
+
+# Frontend Node modules
+frontend/node_modules/
+frontend/.vite/
+
+# Packages and Builds
+build/
+.coverage
+
+# Data logs and seeds
+data/logs/*
+data/replication_seeds/*
+data/search_index/*
+
+# Temporary / OS
+antigravity
+.DS_Store
+*.swp
+*~

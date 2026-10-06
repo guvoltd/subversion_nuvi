@@ -1,0 +1,78 @@
+{
+  "name": "subversion-nuvi",
+  "displayName": "Subversion Nuvi (VisualSVN Integration)",
+  "description": "Enterprise Apache Subversion & VisualSVN integration with live tree explorer, quick diffs, blame, and repository management.",
+  "version": "1.16.1",
+  "publisher": "nuvi-team",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nuvi-svn-explorer",
+          "title": "Subversion Nuvi",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nuvi-svn-explorer": [
+        {
+          "id": "nuviRepositoriesView",
+          "name": "Repositories & Working Copies"
+        },
+        {
+          "id": "nuviLocksView",
+          "name": "Active Locks & Transactions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nuvi.refreshRepositories",
+        "title": "Subversion Nuvi: Refresh Repositories",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nuvi.showBlame",
+        "title": "Subversion Nuvi: View Annotations (Blame)"
+      },
+      {
+        "command": "nuvi.showDiff",
+        "title": "Subversion Nuvi: Compare with Latest Revision"
+      },
+      {
+        "command": "nuvi.openWebClient",
+        "title": "Subversion Nuvi: Open Web Explorer"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Subversion Nuvi Configuration",
+      "properties": {
+        "nuvi.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Subversion Nuvi server endpoint URL"
+        },
+        "nuvi.username": {
+          "type": "string",
+          "default": "",
+          "description": "Default Subversion username"
+        },
+        "nuvi.autoRefreshInterval": {
+          "type": "number",
+          "default": 30,
+          "description": "Auto-refresh interval in seconds"
+        }
+      }
+    }
+  }
+}

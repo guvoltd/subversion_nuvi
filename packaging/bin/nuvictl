@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -e
+
+# Resolve symlinks to find real script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+NUVI_DIR="$(cd -P "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+
+if [ -f "$NUVI_DIR/venv/bin/python3" ]; then
+    PY_BIN="$NUVI_DIR/venv/bin/python3"
+elif [ -f "/opt/nuvi/venv/bin/python3" ]; then
+    PY_BIN="/opt/nuvi/venv/bin/python3"
+else
+    PY_BIN="$(command -v python3)"
+fi
+
+export PYTHONPATH="$NUVI_DIR:$PYTHONPATH"
+exec "$PY_BIN" "$NUVI_DIR/backend/cli/nuvictl.py" "$@"

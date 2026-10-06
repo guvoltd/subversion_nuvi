@@ -1,0 +1,14 @@
+.git
+subversion
+venv
+dist
+build
+.pytest_cache
+frontend/node_modules
+data/repositories
+data/backups
+data/db
+data/logs
+data/search_index
+data/replication_seeds
+backend/core/build
