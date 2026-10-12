@@ -1,0 +1,1 @@
+scripts/fix_repo_permissions.sh

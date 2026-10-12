@@ -230,6 +230,145 @@ def test_acl_rules_and_authz_compiler():
             pass
         client.delete(f"/api/v1/repositories/{repo_id}?delete_files=true")
 
+def test_grant_only_deny_only_and_hybrid_modes():
+    uid = uuid.uuid4().hex[:6]
+    repo_name = f"modes_repo_{uid}"
+    user_fw = f"fw_{uid}"
+    user_hw = f"hw_{uid}"
+
+    # Create users
+    client.post("/api/v1/users", json={"username": user_fw, "password": "StrongPassword123!"})
+    client.post("/api/v1/users", json={"username": user_hw, "password": "StrongPassword123!"})
+
+    # Create repository
+    r_res = client.post("/api/v1/repositories", json={"name": repo_name, "description": "Mode testing repo"})
+    assert r_res.status_code == 201
+    repo_id = r_res.json()["id"]
+
+    try:
+        # 1. User FW: Grant-Only on /trunk/code
+        r_fw = client.post("/api/v1/acl/rules", json={
+            "repository_id": repo_id,
+            "path": "/trunk/code",
+            "principal_type": "user",
+            "principal_name": user_fw,
+            "permission": "rw"
+        })
+        assert r_fw.status_code == 201
+
+        # 2. User HW: Deny-Only on /trunk/hardware
+        r_hw = client.post("/api/v1/acl/rules", json={
+            "repository_id": repo_id,
+            "path": "/trunk/hardware",
+            "principal_type": "user",
+            "principal_name": user_hw,
+            "permission": ""
+        })
+        assert r_hw.status_code == 201
+
+        # 3. Compile authz
+        comp = client.post("/api/v1/acl/compile")
+        assert comp.status_code == 200
+
+        # Read compiled authz directly from disk
+        from backend.api.config import config
+        content = config.AUTHZ_FILE.read_text()
+
+        # HW (Deny-Only): root should automatically have 'rw', while /trunk/hardware has ''
+        assert f"[{repo_name}:/]" in content
+        assert f"[{repo_name}:/trunk/hardware]" in content
+
+        # FW (Grant-Only): /trunk/code has 'rw', while siblings like /branches and /trunk/hardware have ''
+        assert f"[{repo_name}:/trunk/code]" in content
+
+        # 4. Evaluate permissions:
+        # User HW (Deny-Only):
+        # /trunk/code -> should be granted 'rw' automatically!
+        hw_code = client.post("/api/v1/acl/evaluate", json={
+            "username": user_hw,
+            "repository_id": repo_id,
+            "path": "/trunk/code"
+        })
+        assert hw_code.status_code == 200
+        assert hw_code.json()["effective_permission"] == "rw"
+
+        # /trunk/hardware -> should be explicitly denied ''!
+        hw_hw = client.post("/api/v1/acl/evaluate", json={
+            "username": user_hw,
+            "repository_id": repo_id,
+            "path": "/trunk/hardware"
+        })
+        assert hw_hw.status_code == 200
+        assert hw_hw.json()["effective_permission"] == ""
+
+        # User FW (Grant-Only):
+        # /trunk/code -> 'rw'
+        fw_code = client.post("/api/v1/acl/evaluate", json={
+            "username": user_fw,
+            "repository_id": repo_id,
+            "path": "/trunk/code"
+        })
+        assert fw_code.status_code == 200
+        assert fw_code.json()["effective_permission"] == "rw"
+
+        # /trunk/hardware -> denied '' (sibling exclusion)
+        fw_hw = client.post("/api/v1/acl/evaluate", json={
+            "username": user_fw,
+            "repository_id": repo_id,
+            "path": "/trunk/hardware"
+        })
+        assert fw_hw.status_code == 200
+        assert fw_hw.json()["effective_permission"] == ""
+
+        # 5. User HY (Hybrid Mode: Grant /trunk and Deny /trunk/hardware)
+        user_hy = f"hy_{uid}"
+        client.post("/api/v1/users", json={"username": user_hy, "password": "StrongPassword123!"})
+        client.post("/api/v1/acl/rules", json={
+            "repository_id": repo_id,
+            "path": "/trunk",
+            "principal_type": "user",
+            "principal_name": user_hy,
+            "permission": "rw"
+        })
+        client.post("/api/v1/acl/rules", json={
+            "repository_id": repo_id,
+            "path": "/trunk/hardware",
+            "principal_type": "user",
+            "principal_name": user_hy,
+            "permission": ""
+        })
+        client.post("/api/v1/acl/compile")
+
+        # /trunk/code inherits 'rw' from /trunk
+        hy_code = client.post("/api/v1/acl/evaluate", json={
+            "username": user_hy,
+            "repository_id": repo_id,
+            "path": "/trunk/code"
+        })
+        assert hy_code.status_code == 200
+        assert hy_code.json()["effective_permission"] == "rw"
+
+        # /trunk/hardware is explicitly denied ''
+        hy_hw = client.post("/api/v1/acl/evaluate", json={
+            "username": user_hy,
+            "repository_id": repo_id,
+            "path": "/trunk/hardware"
+        })
+        assert hy_hw.status_code == 200
+        assert hy_hw.json()["effective_permission"] == ""
+
+        # /branches outside /trunk is denied ''
+        hy_branches = client.post("/api/v1/acl/evaluate", json={
+            "username": user_hy,
+            "repository_id": repo_id,
+            "path": "/branches"
+        })
+        assert hy_branches.status_code == 200
+        assert hy_branches.json()["effective_permission"] == ""
+
+    finally:
+        client.delete(f"/api/v1/repositories/{repo_id}?delete_files=true")
+
 def test_repository_supervisors():
     uid = uuid.uuid4().hex[:6]
     test_repo_name = f"sup_repo_{uid}"
@@ -339,4 +478,113 @@ def test_implicit_traversal_and_sparse_sibling_exclusion():
 
     finally:
         client.delete(f"/api/v1/repositories/{repo_id}?delete_files=true")
+
+
+def test_default_admin_and_authz_htpasswd_bootstrap():
+    """Verify that default administrator account is seeded and authz/htpasswd files are generated."""
+    from backend.api.config import config
+    from backend.api.db import init_db
+
+    # Ensure init_db executes cleanly
+    init_db()
+
+    # 1. Verify admin login with default credentials admin/admin
+    login_res = client.post("/api/v1/auth/login", json={
+        "username": "admin",
+        "password": "admin"
+    })
+    assert login_res.status_code == 200
+    login_data = login_res.json()
+    assert login_data["status"] == "authenticated"
+    assert login_data["user"]["username"] == "admin"
+    assert login_data["user"]["is_admin"] is True
+    assert "token" in login_data
+
+    # 2. Verify config.AUTHZ_FILE exists and contains root RW permissions for admin
+    assert config.AUTHZ_FILE.exists()
+    authz_content = config.AUTHZ_FILE.read_text(encoding="utf-8")
+    assert "[/]" in authz_content
+    assert "admin = rw" in authz_content
+
+    # 3. Verify config.HTPASSWD_FILE exists and contains Apache SHA hash for admin
+    assert config.HTPASSWD_FILE.exists()
+    htpasswd_content = config.HTPASSWD_FILE.read_text(encoding="utf-8")
+    assert "admin:{SHA}" in htpasswd_content
+
+
+def test_env_file_resilience_on_permission_denied(monkeypatch):
+    """Verify that load_env_file gracefully survives PermissionError on inaccessible config files."""
+    from backend.api.config import load_env_file
+    import builtins
+    from pathlib import Path
+
+    original_open = builtins.open
+    def mock_open(file, *args, **kwargs):
+        if str(file).endswith(".env") or str(file).endswith("nuvi.env"):
+            raise PermissionError(13, f"Permission denied: '{file}'")
+        return original_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", mock_open)
+    # Should not raise PermissionError and handle gracefully
+    res = load_env_file(explicit_path="/etc/nuvi/nuvi.env")
+    assert res is None or isinstance(res, Path)
+
+
+def test_batch_access_rules_multi_user():
+    """Verify creating batch access rules across multiple users and paths."""
+    from backend.api.config import config
+    uid = uuid.uuid4().hex[:6]
+    user_a = f"fw_{uid}"
+    user_b = f"hw_{uid}"
+
+    # Provision test users
+    client.post("/api/v1/users", json={"username": user_a, "password": "Password123!", "is_admin": False})
+    client.post("/api/v1/users", json={"username": user_b, "password": "Password123!", "is_admin": False})
+
+    batch_payload = {
+        "rules": [
+            {
+                "repository_id": None,
+                "path": f"/projects_{uid}/code",
+                "principal_type": "user",
+                "principal_name": user_a,
+                "permission": "rw",
+                "rule_order": 0
+            },
+            {
+                "repository_id": None,
+                "path": f"/projects_{uid}/code",
+                "principal_type": "user",
+                "principal_name": user_b,
+                "permission": "r",
+                "rule_order": 0
+            },
+            {
+                "repository_id": None,
+                "path": f"/projects_{uid}/hardware",
+                "principal_type": "user",
+                "principal_name": user_b,
+                "permission": "rw",
+                "rule_order": 0
+            }
+        ]
+    }
+
+    res = client.post("/api/v1/acl/rules/batch", json=batch_payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert len(data) == 3
+
+    # Verify authz compilation reflects the batch rules
+    authz_content = config.AUTHZ_FILE.read_text(encoding="utf-8")
+    assert f"[/projects_{uid}/code]" in authz_content
+    assert f"{user_a} = rw" in authz_content
+    assert f"{user_b} = r" in authz_content
+    assert f"[/projects_{uid}/hardware]" in authz_content
+    assert f"{user_b} = rw" in authz_content
+
+    # Clean up rules
+    for r in data:
+        client.delete(f"/api/v1/acl/rules/{r['id']}")
+
 

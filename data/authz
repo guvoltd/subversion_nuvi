@@ -1,149 +1,951 @@
 # ==============================================================================
 # Subversion Nuvi - Compiled Authorization File (authz)
-# Generated automatically at: 2026-10-06T12:42:49.098750+00:00
+# Generated automatically at: 2026-10-12T10:46:54.242685+00:00
 # DO NOT EDIT MANUALLY - Changes will be overwritten by Subversion Nuvi
 # ==============================================================================
 
 [groups]
-developers = 
-engineers_3e4665 = 
 designers_24e2bb = charlie_24e2bb
-engineers_eb484e = 
 designers_4500c1 = charlie_4500c1
-engineers_420d8b = 
 designers_0aa51a = charlie_0aa51a
-engineers_471aab = 
 designers_006d1d = charlie_006d1d
-engineers_884ab3 = 
 designers_7a1260 = charlie_7a1260
-engineers_717740 = 
 designers_e48934 = charlie_e48934
-engineers_5dc896 = 
 designers_10070d = charlie_10070d
-engineers_fff641 = 
 designers_99848a = charlie_99848a
-engineers_70d6dc = 
 designers_cb6d4c = charlie_cb6d4c
-engineers_55e7c6 = 
 designers_3b2b55 = charlie_3b2b55
-engineers_532e51 = 
 designers_6280c3 = charlie_6280c3
-engineers_98566d = 
 designers_54661d = charlie_54661d
-engineers_c8199d = 
 designers_68fba5 = charlie_68fba5
-engineers_80954a = 
 designers_7ca7f5 = charlie_7ca7f5
-engineers_e8b1be = 
 designers_355d50 = charlie_355d50
-engineers_b07407 = 
 designers_60fc6b = charlie_60fc6b
-engineers_d428cd = 
 designers_321ce7 = charlie_321ce7
-engineers_1e574f = 
 designers_5fd379 = charlie_5fd379
-engineers_448dc0 = 
 designers_048dce = charlie_048dce
 BackendDevs = alice_vsvn, bob_vsvn
 QualityAssurance = charlie_vsvn
 SecTeam = sec_user
-engineers_fb243d = 
 designers_6febb3 = charlie_6febb3
-engineers_36c694 = 
 designers_5105ab = charlie_5105ab
-engineers_8639c0 = 
 designers_bda213 = charlie_bda213
-engineers_26241e = 
 designers_c48bb7 = charlie_c48bb7
-engineers_b09243 = 
 designers_3b4151 = charlie_3b4151
-engineers_ef604f = 
 designers_f6ea56 = charlie_f6ea56
-engineers_f99747 = 
 designers_53f058 = charlie_53f058
+designers_794be0 = charlie_794be0
+designers_414ec5 = charlie_414ec5
+designers_e31a72 = charlie_e31a72
+designers_3d40e8 = charlie_3d40e8
+designers_2cde56 = charlie_2cde56
+designers_5569c8 = charlie_5569c8
+designers_da9237 = charlie_da9237
+designers_0b372b = charlie_0b372b
+designers_ae227c = charlie_ae227c
+designers_13c152 = charlie_13c152
+designers_9ae143 = charlie_9ae143
+designers_ae25d6 = charlie_ae25d6
+designers_c8682c = charlie_c8682c
+designers_e1bd92 = charlie_e1bd92
+designers_b8441d = charlie_b8441d
+designers_54cb33 = charlie_54cb33
+designers_d369fe = charlie_d369fe
+designers_bfb535 = charlie_bfb535
+designers_320121 = charlie_320121
+designers_2cf9a2 = charlie_2cf9a2
+designers_0a530e = charlie_0a530e
+designers_4bcb64 = charlie_4bcb64
+designers_c05e93 = charlie_c05e93
+designers_edc5cf = charlie_edc5cf
+designers_efa871 = charlie_efa871
+designers_2c71de = charlie_2c71de
+designers_5c8779 = charlie_5c8779
+designers_603b8d = charlie_603b8d
+designers_f8209a = charlie_f8209a
+designers_bfe390 = charlie_bfe390
+designers_b9ec45 = charlie_b9ec45
+designers_67b220 = charlie_67b220
+
+[/]
+admin = rw
+
+[BackupRepo_00351b:/]
+admin = rw
+
+[BackupRepo_0d2d7a:/]
+admin = rw
+
+[BackupRepo_112d54:/]
+admin = rw
+
+[BackupRepo_1b7e2e:/]
+admin = rw
+
+[BackupRepo_233c6d:/]
+admin = rw
+
+[BackupRepo_2d455e:/]
+admin = rw
+
+[BackupRepo_33e551:/]
+admin = rw
+
+[BackupRepo_3e142c:/]
+admin = rw
+
+[BackupRepo_417241:/]
+admin = rw
+
+[BackupRepo_469f7c:/]
+admin = rw
+
+[BackupRepo_58b370:/]
+admin = rw
+
+[BackupRepo_5ad3dc:/]
+admin = rw
+
+[BackupRepo_60317f:/]
+admin = rw
+
+[BackupRepo_62f514:/]
+admin = rw
+
+[BackupRepo_63325d:/]
+admin = rw
+
+[BackupRepo_66e31c:/]
+admin = rw
+
+[BackupRepo_6dd410:/]
+admin = rw
+
+[BackupRepo_7092f0:/]
+admin = rw
+
+[BackupRepo_74ecf9:/]
+admin = rw
+
+[BackupRepo_754ae3:/]
+admin = rw
+
+[BackupRepo_763d92:/]
+admin = rw
+
+[BackupRepo_896426:/]
+admin = rw
+
+[BackupRepo_8c2d1c:/]
+admin = rw
+
+[BackupRepo_8ddfff:/]
+admin = rw
+
+[BackupRepo_9c28f9:/]
+admin = rw
+
+[BackupRepo_a42f34:/]
+admin = rw
+
+[BackupRepo_a8306b:/]
+admin = rw
+
+[BackupRepo_ab16a7:/]
+admin = rw
+
+[BackupRepo_abee78:/]
+admin = rw
+
+[BackupRepo_af3a6e:/]
+admin = rw
+
+[BackupRepo_b5836f:/]
+admin = rw
+
+[BackupRepo_bf33f5:/]
+admin = rw
+
+[BackupRepo_c1bf2b:/]
+admin = rw
+
+[BackupRepo_cdc074:/]
+admin = rw
+
+[BackupRepo_cfc156:/]
+admin = rw
+
+[BackupRepo_d6d7b8:/]
+admin = rw
+
+[BackupRepo_dc5542:/]
+admin = rw
+
+[BackupRepo_dfaa58:/]
+admin = rw
+
+[BackupRepo_e09069:/]
+admin = rw
+
+[BackupRepo_e5e2b0:/]
+admin = rw
+
+[BackupRepo_ed3df4:/]
+admin = rw
+
+[BackupRepo_f1447b:/]
+admin = rw
+
+[BackupRepo_f75d4b:/]
+admin = rw
+
+[BackupRepo_f87be3:/]
+admin = rw
+
+[HookRepo_008fa4:/]
+admin = rw
+
+[HookRepo_016411:/]
+admin = rw
+
+[HookRepo_0346bc:/]
+admin = rw
+
+[HookRepo_061720:/]
+admin = rw
+
+[HookRepo_07e241:/]
+admin = rw
+
+[HookRepo_084a81:/]
+admin = rw
+
+[HookRepo_0c8158:/]
+admin = rw
+
+[HookRepo_0d6245:/]
+admin = rw
+
+[HookRepo_0fa0d5:/]
+admin = rw
+
+[HookRepo_1089ae:/]
+admin = rw
+
+[HookRepo_2daffe:/]
+admin = rw
+
+[HookRepo_2f94d5:/]
+admin = rw
+
+[HookRepo_3127ec:/]
+admin = rw
+
+[HookRepo_3180bc:/]
+admin = rw
+
+[HookRepo_392b7d:/]
+admin = rw
+
+[HookRepo_398262:/]
+admin = rw
+
+[HookRepo_3d896b:/]
+admin = rw
+
+[HookRepo_442164:/]
+admin = rw
+
+[HookRepo_4977fb:/]
+admin = rw
+
+[HookRepo_5082b7:/]
+admin = rw
+
+[HookRepo_597020:/]
+admin = rw
+
+[HookRepo_5a0a35:/]
+admin = rw
+
+[HookRepo_65f712:/]
+admin = rw
+
+[HookRepo_6eb27a:/]
+admin = rw
+
+[HookRepo_75f88f:/]
+admin = rw
+
+[HookRepo_7709c3:/]
+admin = rw
+
+[HookRepo_96b163:/]
+admin = rw
+
+[HookRepo_980bb7:/]
+admin = rw
+
+[HookRepo_a59fa3:/]
+admin = rw
+
+[HookRepo_a7bdab:/]
+admin = rw
+
+[HookRepo_ab6aab:/]
+admin = rw
+
+[HookRepo_b04773:/]
+admin = rw
+
+[HookRepo_b2cda7:/]
+admin = rw
+
+[HookRepo_c0900a:/]
+admin = rw
+
+[HookRepo_c60222:/]
+admin = rw
+
+[HookRepo_d00e6b:/]
+admin = rw
+
+[HookRepo_d38fec:/]
+admin = rw
+
+[HookRepo_e25239:/]
+admin = rw
+
+[HookRepo_e29028:/]
+admin = rw
+
+[HookRepo_e58d39:/]
+admin = rw
+
+[HookRepo_f172bc:/]
+admin = rw
+
+[HookRepo_f34883:/]
+admin = rw
+
+[HookRepo_fb876d:/]
+admin = rw
+
+[HookRepo_ffaa39:/]
+admin = rw
+
+[MasterRepo_017619:/]
+admin = rw
+
+[MasterRepo_053bdd:/]
+admin = rw
+
+[MasterRepo_10c9aa:/]
+admin = rw
+
+[MasterRepo_13fbb5:/]
+admin = rw
+
+[MasterRepo_157d99:/]
+admin = rw
+
+[MasterRepo_18da5f:/]
+admin = rw
+
+[MasterRepo_1bc228:/]
+admin = rw
+
+[MasterRepo_1dca7a:/]
+admin = rw
+
+[MasterRepo_1e0d8a:/]
+admin = rw
+
+[MasterRepo_1e9735:/]
+admin = rw
+
+[MasterRepo_2683c1:/]
+admin = rw
+
+[MasterRepo_3738e1:/]
+admin = rw
+
+[MasterRepo_3c9ffa:/]
+admin = rw
+
+[MasterRepo_458bc0:/]
+admin = rw
+
+[MasterRepo_46440c:/]
+admin = rw
+
+[MasterRepo_4650c4:/]
+admin = rw
+
+[MasterRepo_492561:/]
+admin = rw
+
+[MasterRepo_4a6b4f:/]
+admin = rw
+
+[MasterRepo_544808:/]
+admin = rw
+
+[MasterRepo_58b4eb:/]
+admin = rw
+
+[MasterRepo_5a62cf:/]
+admin = rw
+
+[MasterRepo_5daf4c:/]
+admin = rw
+
+[MasterRepo_60b809:/]
+admin = rw
+
+[MasterRepo_671634:/]
+admin = rw
+
+[MasterRepo_68d5dd:/]
+admin = rw
+
+[MasterRepo_6d072d:/]
+admin = rw
+
+[MasterRepo_6f2d72:/]
+admin = rw
+
+[MasterRepo_72a1cd:/]
+admin = rw
+
+[MasterRepo_7483ef:/]
+admin = rw
+
+[MasterRepo_756018:/]
+admin = rw
+
+[MasterRepo_809656:/]
+admin = rw
+
+[MasterRepo_a0f76e:/]
+admin = rw
+
+[MasterRepo_a31039:/]
+admin = rw
+
+[MasterRepo_a707f0:/]
+admin = rw
+
+[MasterRepo_ae17f9:/]
+admin = rw
+
+[MasterRepo_ba5b96:/]
+admin = rw
+
+[MasterRepo_c185ac:/]
+admin = rw
+
+[MasterRepo_c35503:/]
+admin = rw
+
+[MasterRepo_c4d387:/]
+admin = rw
+
+[MasterRepo_cb10ba:/]
+admin = rw
+
+[MasterRepo_cdc589:/]
+admin = rw
+
+[MasterRepo_d31761:/]
+admin = rw
+
+[MasterRepo_d3556f:/]
+admin = rw
+
+[MasterRepo_e6be22:/]
+admin = rw
+
+[Restored_00351b:/]
+admin = rw
+
+[Restored_0d2d7a:/]
+admin = rw
+
+[Restored_112d54:/]
+admin = rw
+
+[Restored_1b7e2e:/]
+admin = rw
+
+[Restored_233c6d:/]
+admin = rw
+
+[Restored_2d455e:/]
+admin = rw
+
+[Restored_33e551:/]
+admin = rw
+
+[Restored_3e142c:/]
+admin = rw
+
+[Restored_417241:/]
+admin = rw
+
+[Restored_469f7c:/]
+admin = rw
+
+[Restored_58b370:/]
+admin = rw
+
+[Restored_5ad3dc:/]
+admin = rw
+
+[Restored_60317f:/]
+admin = rw
+
+[Restored_62f514:/]
+admin = rw
+
+[Restored_63325d:/]
+admin = rw
+
+[Restored_66e31c:/]
+admin = rw
+
+[Restored_6dd410:/]
+admin = rw
+
+[Restored_7092f0:/]
+admin = rw
+
+[Restored_74ecf9:/]
+admin = rw
+
+[Restored_754ae3:/]
+admin = rw
+
+[Restored_763d92:/]
+admin = rw
+
+[Restored_896426:/]
+admin = rw
+
+[Restored_8c2d1c:/]
+admin = rw
+
+[Restored_8ddfff:/]
+admin = rw
+
+[Restored_9c28f9:/]
+admin = rw
+
+[Restored_a42f34:/]
+admin = rw
+
+[Restored_a8306b:/]
+admin = rw
+
+[Restored_ab16a7:/]
+admin = rw
+
+[Restored_abee78:/]
+admin = rw
+
+[Restored_af3a6e:/]
+admin = rw
+
+[Restored_b5836f:/]
+admin = rw
+
+[Restored_bf33f5:/]
+admin = rw
+
+[Restored_c1bf2b:/]
+admin = rw
+
+[Restored_cdc074:/]
+admin = rw
+
+[Restored_cfc156:/]
+admin = rw
+
+[Restored_d6d7b8:/]
+admin = rw
+
+[Restored_dc5542:/]
+admin = rw
+
+[Restored_dfaa58:/]
+admin = rw
+
+[Restored_e09069:/]
+admin = rw
+
+[Restored_e5e2b0:/]
+admin = rw
+
+[Restored_ed3df4:/]
+admin = rw
+
+[Restored_f1447b:/]
+admin = rw
+
+[Restored_f75d4b:/]
+admin = rw
+
+[Restored_f87be3:/]
+admin = rw
 
 [SearchRepo_085913:/]
+admin = rw
 charlie_085913 = r
 
 [SearchRepo_0ba795:/]
+admin = rw
 charlie_0ba795 = r
 
 [SearchRepo_0ca719:/]
+admin = rw
 charlie_0ca719 = r
 
+[SearchRepo_12991b:/]
+admin = rw
+charlie_12991b = r
+
+[SearchRepo_1e7712:/]
+admin = rw
+
+[SearchRepo_2d1fa3:/]
+admin = rw
+charlie_2d1fa3 = r
+
+[SearchRepo_36d0cf:/]
+admin = rw
+charlie_36d0cf = r
+
 [SearchRepo_39f3b0:/]
+admin = rw
 charlie_39f3b0 = r
 
+[SearchRepo_4954e0:/]
+admin = rw
+charlie_4954e0 = r
+
+[SearchRepo_4bc098:/]
+admin = rw
+charlie_4bc098 = r
+
+[SearchRepo_4e57c9:/]
+admin = rw
+charlie_4e57c9 = r
+
+[SearchRepo_5118d8:/]
+admin = rw
+charlie_5118d8 = r
+
 [SearchRepo_588946:/]
+admin = rw
 charlie_588946 = r
 
+[SearchRepo_5cbb0e:/]
+admin = rw
+charlie_5cbb0e = r
+
+[SearchRepo_5d47e7:/]
+admin = rw
+charlie_5d47e7 = r
+
+[SearchRepo_653693:/]
+admin = rw
+charlie_653693 = r
+
+[SearchRepo_6df5ae:/]
+admin = rw
+charlie_6df5ae = r
+
 [SearchRepo_6f533c:/]
+admin = rw
 charlie_6f533c = r
 
+[SearchRepo_730b0f:/]
+admin = rw
+charlie_730b0f = r
+
 [SearchRepo_74ff9b:/]
+admin = rw
 charlie_74ff9b = r
 
+[SearchRepo_8319c3:/]
+admin = rw
+charlie_8319c3 = r
+
 [SearchRepo_836360:/]
+admin = rw
 charlie_836360 = r
 
 [SearchRepo_84637b:/]
+admin = rw
 charlie_84637b = r
 
 [SearchRepo_85375c:/]
+admin = rw
 charlie_85375c = r
 
 [SearchRepo_89d045:/]
+admin = rw
 charlie_89d045 = r
 
+[SearchRepo_8db50f:/]
+admin = rw
+charlie_8db50f = r
+
+[SearchRepo_98be4e:/]
+admin = rw
+charlie_98be4e = r
+
 [SearchRepo_9b85b2:/]
+admin = rw
 charlie_9b85b2 = r
 
 [SearchRepo_9e99b5:/]
+admin = rw
 charlie_9e99b5 = r
 
+[SearchRepo_9f225b:/]
+admin = rw
+charlie_9f225b = r
+
+[SearchRepo_9f4da0:/]
+admin = rw
+charlie_9f4da0 = r
+
 [SearchRepo_a361a8:/]
+admin = rw
 charlie_a361a8 = r
 
+[SearchRepo_ad3415:/]
+admin = rw
+charlie_ad3415 = r
+
+[SearchRepo_b0ce70:/]
+admin = rw
+
+[SearchRepo_b21152:/]
+admin = rw
+charlie_b21152 = r
+
 [SearchRepo_b7c430:/]
+admin = rw
 charlie_b7c430 = r
 
 [SearchRepo_b9f373:/]
+admin = rw
 charlie_b9f373 = r
 
+[SearchRepo_ba6c70:/]
+admin = rw
+charlie_ba6c70 = r
+
+[SearchRepo_cbb78c:/]
+admin = rw
+charlie_cbb78c = r
+
+[SearchRepo_ce133b:/]
+admin = rw
+charlie_ce133b = r
+
 [SearchRepo_d2d923:/]
+admin = rw
 charlie_d2d923 = r
 
 [SearchRepo_d924da:/]
+admin = rw
 charlie_d924da = r
 
+[SearchRepo_df2059:/]
+admin = rw
+charlie_df2059 = r
+
+[SearchRepo_e1dc51:/]
+admin = rw
+
+[SearchRepo_e69405:/]
+admin = rw
+charlie_e69405 = r
+
+[SearchRepo_efb556:/]
+admin = rw
+charlie_efb556 = r
+
 [SearchRepo_f2462f:/]
+admin = rw
 charlie_f2462f = r
 
-[acl_test_repo:/]
-@developers = rw
+[SlaveRepo_017619:/]
+admin = rw
 
-[sparse_repo_d91c77:/]
-bob_d91c77 = r
+[SlaveRepo_053bdd:/]
+admin = rw
+
+[SlaveRepo_10c9aa:/]
+admin = rw
+
+[SlaveRepo_13fbb5:/]
+admin = rw
+
+[SlaveRepo_157d99:/]
+admin = rw
+
+[SlaveRepo_18da5f:/]
+admin = rw
+
+[SlaveRepo_1bc228:/]
+admin = rw
+
+[SlaveRepo_1dca7a:/]
+admin = rw
+
+[SlaveRepo_1e0d8a:/]
+admin = rw
+
+[SlaveRepo_1e9735:/]
+admin = rw
+
+[SlaveRepo_2683c1:/]
+admin = rw
+
+[SlaveRepo_3738e1:/]
+admin = rw
+
+[SlaveRepo_3c9ffa:/]
+admin = rw
+
+[SlaveRepo_458bc0:/]
+admin = rw
+
+[SlaveRepo_46440c:/]
+admin = rw
+
+[SlaveRepo_4650c4:/]
+admin = rw
+
+[SlaveRepo_492561:/]
+admin = rw
+
+[SlaveRepo_4a6b4f:/]
+admin = rw
+
+[SlaveRepo_544808:/]
+admin = rw
+
+[SlaveRepo_58b4eb:/]
+admin = rw
+
+[SlaveRepo_5daf4c:/]
+admin = rw
+
+[SlaveRepo_60b809:/]
+admin = rw
+
+[SlaveRepo_671634:/]
+admin = rw
+
+[SlaveRepo_68d5dd:/]
+admin = rw
+
+[SlaveRepo_6d072d:/]
+admin = rw
+
+[SlaveRepo_6f2d72:/]
+admin = rw
+
+[SlaveRepo_72a1cd:/]
+admin = rw
+
+[SlaveRepo_7483ef:/]
+admin = rw
+
+[SlaveRepo_756018:/]
+admin = rw
+
+[SlaveRepo_809656:/]
+admin = rw
+
+[SlaveRepo_a0f76e:/]
+admin = rw
+
+[SlaveRepo_a31039:/]
+admin = rw
+
+[SlaveRepo_a707f0:/]
+admin = rw
+
+[SlaveRepo_ae17f9:/]
+admin = rw
+
+[SlaveRepo_ba5b96:/]
+admin = rw
+
+[SlaveRepo_c185ac:/]
+admin = rw
+
+[SlaveRepo_c35503:/]
+admin = rw
+
+[SlaveRepo_c4d387:/]
+admin = rw
+
+[SlaveRepo_cb10ba:/]
+admin = rw
+
+[SlaveRepo_cdc589:/]
+admin = rw
+
+[SlaveRepo_d31761:/]
+admin = rw
+
+[SlaveRepo_d3556f:/]
+admin = rw
+
+[SlaveRepo_e6be22:/]
+admin = rw
+
+[acl_test_repo:/]
+* = rw
+@developers = rw
+admin = rw
+
+[supervisor_test_repo:/]
+admin = rw
+
+[test_feat_repo:/]
+admin = rw
 
 [vsvn_import_test_arc:/]
 * = r
 @BackendDevs = rw
 @QualityAssurance = r
+admin = rw
 
 [vsvn_import_test_arc_1:/]
 * = r
 @BackendDevs = rw
 @QualityAssurance = r
+admin = rw
 
 [vsvn_imported_alpha:/]
 * = r
 @BackendDevs = rw
 @QualityAssurance = r
+admin = rw
 
 [vsvn_imported_alpha_1:/]
 * = r
 @BackendDevs = rw
 @QualityAssurance = r
+admin = rw
 
 [SearchRepo_085913:/branches]
 charlie_085913 = 
@@ -172,6 +974,33 @@ charlie_0ca719 =
 [SearchRepo_0ca719:/trunk]
 charlie_0ca719 = r
 
+[SearchRepo_12991b:/branches]
+charlie_12991b = 
+
+[SearchRepo_12991b:/tags]
+charlie_12991b = 
+
+[SearchRepo_12991b:/trunk]
+charlie_12991b = r
+
+[SearchRepo_2d1fa3:/branches]
+charlie_2d1fa3 = 
+
+[SearchRepo_2d1fa3:/tags]
+charlie_2d1fa3 = 
+
+[SearchRepo_2d1fa3:/trunk]
+charlie_2d1fa3 = r
+
+[SearchRepo_36d0cf:/branches]
+charlie_36d0cf = 
+
+[SearchRepo_36d0cf:/tags]
+charlie_36d0cf = 
+
+[SearchRepo_36d0cf:/trunk]
+charlie_36d0cf = r
+
 [SearchRepo_39f3b0:/branches]
 charlie_39f3b0 = 
 
@@ -180,6 +1009,42 @@ charlie_39f3b0 =
 
 [SearchRepo_39f3b0:/trunk]
 charlie_39f3b0 = r
+
+[SearchRepo_4954e0:/branches]
+charlie_4954e0 = 
+
+[SearchRepo_4954e0:/tags]
+charlie_4954e0 = 
+
+[SearchRepo_4954e0:/trunk]
+charlie_4954e0 = r
+
+[SearchRepo_4bc098:/branches]
+charlie_4bc098 = 
+
+[SearchRepo_4bc098:/tags]
+charlie_4bc098 = 
+
+[SearchRepo_4bc098:/trunk]
+charlie_4bc098 = r
+
+[SearchRepo_4e57c9:/branches]
+charlie_4e57c9 = 
+
+[SearchRepo_4e57c9:/tags]
+charlie_4e57c9 = 
+
+[SearchRepo_4e57c9:/trunk]
+charlie_4e57c9 = r
+
+[SearchRepo_5118d8:/branches]
+charlie_5118d8 = 
+
+[SearchRepo_5118d8:/tags]
+charlie_5118d8 = 
+
+[SearchRepo_5118d8:/trunk]
+charlie_5118d8 = r
 
 [SearchRepo_588946:/branches]
 charlie_588946 = 
@@ -190,6 +1055,42 @@ charlie_588946 =
 [SearchRepo_588946:/trunk]
 charlie_588946 = r
 
+[SearchRepo_5cbb0e:/branches]
+charlie_5cbb0e = 
+
+[SearchRepo_5cbb0e:/tags]
+charlie_5cbb0e = 
+
+[SearchRepo_5cbb0e:/trunk]
+charlie_5cbb0e = r
+
+[SearchRepo_5d47e7:/branches]
+charlie_5d47e7 = 
+
+[SearchRepo_5d47e7:/tags]
+charlie_5d47e7 = 
+
+[SearchRepo_5d47e7:/trunk]
+charlie_5d47e7 = r
+
+[SearchRepo_653693:/branches]
+charlie_653693 = 
+
+[SearchRepo_653693:/tags]
+charlie_653693 = 
+
+[SearchRepo_653693:/trunk]
+charlie_653693 = r
+
+[SearchRepo_6df5ae:/branches]
+charlie_6df5ae = 
+
+[SearchRepo_6df5ae:/tags]
+charlie_6df5ae = 
+
+[SearchRepo_6df5ae:/trunk]
+charlie_6df5ae = r
+
 [SearchRepo_6f533c:/branches]
 charlie_6f533c = 
 
@@ -199,6 +1100,15 @@ charlie_6f533c =
 [SearchRepo_6f533c:/trunk]
 charlie_6f533c = r
 
+[SearchRepo_730b0f:/branches]
+charlie_730b0f = 
+
+[SearchRepo_730b0f:/tags]
+charlie_730b0f = 
+
+[SearchRepo_730b0f:/trunk]
+charlie_730b0f = r
+
 [SearchRepo_74ff9b:/branches]
 charlie_74ff9b = 
 
@@ -207,6 +1117,15 @@ charlie_74ff9b =
 
 [SearchRepo_74ff9b:/trunk]
 charlie_74ff9b = r
+
+[SearchRepo_8319c3:/branches]
+charlie_8319c3 = 
+
+[SearchRepo_8319c3:/tags]
+charlie_8319c3 = 
+
+[SearchRepo_8319c3:/trunk]
+charlie_8319c3 = r
 
 [SearchRepo_836360:/branches]
 charlie_836360 = 
@@ -244,6 +1163,24 @@ charlie_89d045 =
 [SearchRepo_89d045:/trunk]
 charlie_89d045 = r
 
+[SearchRepo_8db50f:/branches]
+charlie_8db50f = 
+
+[SearchRepo_8db50f:/tags]
+charlie_8db50f = 
+
+[SearchRepo_8db50f:/trunk]
+charlie_8db50f = r
+
+[SearchRepo_98be4e:/branches]
+charlie_98be4e = 
+
+[SearchRepo_98be4e:/tags]
+charlie_98be4e = 
+
+[SearchRepo_98be4e:/trunk]
+charlie_98be4e = r
+
 [SearchRepo_9b85b2:/branches]
 charlie_9b85b2 = 
 
@@ -262,6 +1199,24 @@ charlie_9e99b5 =
 [SearchRepo_9e99b5:/trunk]
 charlie_9e99b5 = r
 
+[SearchRepo_9f225b:/branches]
+charlie_9f225b = 
+
+[SearchRepo_9f225b:/tags]
+charlie_9f225b = 
+
+[SearchRepo_9f225b:/trunk]
+charlie_9f225b = r
+
+[SearchRepo_9f4da0:/branches]
+charlie_9f4da0 = 
+
+[SearchRepo_9f4da0:/tags]
+charlie_9f4da0 = 
+
+[SearchRepo_9f4da0:/trunk]
+charlie_9f4da0 = r
+
 [SearchRepo_a361a8:/branches]
 charlie_a361a8 = 
 
@@ -270,6 +1225,24 @@ charlie_a361a8 =
 
 [SearchRepo_a361a8:/trunk]
 charlie_a361a8 = r
+
+[SearchRepo_ad3415:/branches]
+charlie_ad3415 = 
+
+[SearchRepo_ad3415:/tags]
+charlie_ad3415 = 
+
+[SearchRepo_ad3415:/trunk]
+charlie_ad3415 = r
+
+[SearchRepo_b21152:/branches]
+charlie_b21152 = 
+
+[SearchRepo_b21152:/tags]
+charlie_b21152 = 
+
+[SearchRepo_b21152:/trunk]
+charlie_b21152 = r
 
 [SearchRepo_b7c430:/branches]
 charlie_b7c430 = 
@@ -289,6 +1262,33 @@ charlie_b9f373 =
 [SearchRepo_b9f373:/trunk]
 charlie_b9f373 = r
 
+[SearchRepo_ba6c70:/branches]
+charlie_ba6c70 = 
+
+[SearchRepo_ba6c70:/tags]
+charlie_ba6c70 = 
+
+[SearchRepo_ba6c70:/trunk]
+charlie_ba6c70 = r
+
+[SearchRepo_cbb78c:/branches]
+charlie_cbb78c = 
+
+[SearchRepo_cbb78c:/tags]
+charlie_cbb78c = 
+
+[SearchRepo_cbb78c:/trunk]
+charlie_cbb78c = r
+
+[SearchRepo_ce133b:/branches]
+charlie_ce133b = 
+
+[SearchRepo_ce133b:/tags]
+charlie_ce133b = 
+
+[SearchRepo_ce133b:/trunk]
+charlie_ce133b = r
+
 [SearchRepo_d2d923:/branches]
 charlie_d2d923 = 
 
@@ -307,6 +1307,33 @@ charlie_d924da =
 [SearchRepo_d924da:/trunk]
 charlie_d924da = r
 
+[SearchRepo_df2059:/branches]
+charlie_df2059 = 
+
+[SearchRepo_df2059:/tags]
+charlie_df2059 = 
+
+[SearchRepo_df2059:/trunk]
+charlie_df2059 = r
+
+[SearchRepo_e69405:/branches]
+charlie_e69405 = 
+
+[SearchRepo_e69405:/tags]
+charlie_e69405 = 
+
+[SearchRepo_e69405:/trunk]
+charlie_e69405 = r
+
+[SearchRepo_efb556:/branches]
+charlie_efb556 = 
+
+[SearchRepo_efb556:/tags]
+charlie_efb556 = 
+
+[SearchRepo_efb556:/trunk]
+charlie_efb556 = r
+
 [SearchRepo_f2462f:/branches]
 charlie_f2462f = 
 
@@ -315,15 +1342,6 @@ charlie_f2462f =
 
 [SearchRepo_f2462f:/trunk]
 charlie_f2462f = r
-
-[sparse_repo_d91c77:/branches]
-bob_d91c77 = 
-
-[sparse_repo_d91c77:/tags]
-bob_d91c77 = 
-
-[sparse_repo_d91c77:/trunk]
-bob_d91c77 = r
 
 [vsvn_import_test_arc:/branches]
 * = 
@@ -375,7 +1393,4 @@ bob_d91c77 = r
 
 [acl_test_repo:/trunk/secret]
 * = 
-
-[sparse_repo_d91c77:/trunk/feature1]
-bob_d91c77 = rw
 

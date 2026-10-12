@@ -51,6 +51,13 @@ class ArchivePathImportRequest(BaseModel):
     import_hooks: bool = Field(True, description="Install hook scripts from the archive")
     default_password: Optional[str] = Field("Welcome123!", description="Default password for newly created imported users")
 
+class DumpPathImportRequest(BaseModel):
+    dump_path: str = Field(..., description="Path to .dump, .svndump, or .dump.gz file on the server")
+    repo_name: Optional[str] = Field(None, description="Optional override for imported repository name")
+    description: Optional[str] = Field(None, description="Optional description for the imported repository")
+    import_users: bool = Field(True, description="Auto-create commit authors found in the dump as users")
+    default_password: Optional[str] = Field("Welcome123!", description="Default password for newly created imported users")
+
 class ArchiveImportResponse(BaseModel):
     status: str
     repository_id: int
@@ -105,7 +112,7 @@ class TransactionResponse(BaseModel):
 
 class ServerStatusResponse(BaseModel):
     server_name: str
-    version: str = "1.16.1 (Subversion 1.16.1)"
+    version: str = "1.16.3 (Subversion 1.16.3)"
     uptime_seconds: float
     uptime_formatted: Optional[str] = ""
     repositories_count: int
@@ -181,6 +188,9 @@ class AccessRuleCreateRequest(BaseModel):
     principal_name: str = Field(..., description="Username, group name, or '*' for everyone")
     permission: str = Field(..., description="'rw' (Read/Write), 'r' (Read Only), or '' (Deny)")
     rule_order: int = 0
+
+class AccessRuleBatchCreateRequest(BaseModel):
+    rules: List[AccessRuleCreateRequest] = Field(..., description="List of access rules to create in a single batch")
 
 class AccessRuleResponse(BaseModel):
     id: int

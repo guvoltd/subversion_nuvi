@@ -11,6 +11,7 @@ import bz2
 import shutil
 import tempfile
 import zipfile
+import json
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Set
@@ -33,7 +34,7 @@ from backend.api.models.dto import (
 )
 from backend.api.services.repo_service import RepositoryService
 from backend.api.services.acl_service import AclService
-from backend.api.services.security_service import SecurityService
+from backend.api.services.security_service import SecurityService, generate_apache_sha
 from backend.api.services.svn_native import svn_engine
 
 class ArchiveImportService:
@@ -56,6 +57,19 @@ class ArchiveImportService:
         """
         if not archive_path.exists() or not archive_path.is_file():
             raise FileNotFoundError(f"Archive file not found: {archive_path}")
+
+        # Check if file is directly a Subversion dump file instead of a zip archive
+        if ArchiveImportService._is_likely_dump_file(archive_path) or not zipfile.is_zipfile(archive_path):
+            if ArchiveImportService._is_likely_dump_file(archive_path):
+                return ArchiveImportService.import_repository_dump_file(
+                    db=db,
+                    dump_path=archive_path,
+                    repo_name=repo_name,
+                    import_users=import_users,
+                    default_password=default_password,
+                    actor=actor,
+                    client_ip=client_ip
+                )
 
         staging_dir = Path(tempfile.mkdtemp(prefix="nuvi_import_staging_"))
         try:
@@ -241,6 +255,220 @@ class ArchiveImportService:
                 details=details
             )
 
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+    @staticmethod
+    def _is_likely_dump_file(file_path: Path) -> bool:
+        """Determines if a file is an SVN dump or compressed SVN dump."""
+        low = file_path.name.lower()
+        if low.endswith((".dump", ".svndump", ".dumpfile", ".dump.gz", ".svndump.gz", ".dump.bz2", ".svndump.bz2")):
+            return True
+        try:
+            with open(file_path, "rb") as f:
+                header = f.read(64)
+                if header.startswith(b"SVN-fs-dump-format-version:"):
+                    return True
+                if header.startswith(b"\x1f\x8b"):
+                    try:
+                        with gzip.open(file_path, "rb") as gz:
+                            return gz.read(64).startswith(b"SVN-fs-dump-format-version:")
+                    except Exception:
+                        pass
+                if header.startswith(b"BZh"):
+                    try:
+                        with bz2.open(file_path, "rb") as bz:
+                            return bz.read(64).startswith(b"SVN-fs-dump-format-version:")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return False
+
+    @staticmethod
+    def import_repository_dump_file(
+        db: Session,
+        dump_path: Path,
+        repo_name: Optional[str] = None,
+        description: Optional[str] = None,
+        import_users: bool = True,
+        default_password: str = "Welcome123!",
+        actor: str = "admin",
+        client_ip: str = "127.0.0.1"
+    ) -> ArchiveImportResponse:
+        """
+        Directly imports a standalone Subversion dump file (*.dump, *.svndump, *.dump.gz, *.dump.bz2).
+        Creates a new Subversion repository, restores revision history via svnadmin load,
+        optionally extracts commit authors and creates corresponding user accounts.
+        """
+        if not dump_path.exists() or not dump_path.is_file():
+            raise FileNotFoundError(f"Dump file not found: {dump_path}")
+
+        staging_dir = Path(tempfile.mkdtemp(prefix="nuvi_dump_staging_"))
+        try:
+            # 1. Handle compression if necessary
+            effective_dump_path = dump_path
+            low_name = dump_path.name.lower()
+            if low_name.endswith((".gz", ".dump.gz", ".svndump.gz")):
+                decompressed_name = dump_path.name[:-3]
+                if not decompressed_name.endswith((".dump", ".svndump")):
+                    decompressed_name += ".dump"
+                decompressed_path = staging_dir / decompressed_name
+                with gzip.open(dump_path, "rb") as f_in, open(decompressed_path, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                effective_dump_path = decompressed_path
+            elif low_name.endswith((".bz2", ".dump.bz2", ".svndump.bz2")):
+                decompressed_name = dump_path.name[:-4]
+                if not decompressed_name.endswith((".dump", ".svndump")):
+                    decompressed_name += ".dump"
+                decompressed_path = staging_dir / decompressed_name
+                with bz2.open(dump_path, "rb") as f_in, open(decompressed_path, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+                effective_dump_path = decompressed_path
+
+            # 2. Determine target repository name
+            base_name = repo_name
+            if not base_name:
+                name_clean = dump_path.name
+                for ext in [".dump.gz", ".svndump.gz", ".dump.bz2", ".svndump.bz2", ".dump", ".svndump", ".dumpfile", ".gz", ".bz2"]:
+                    if name_clean.lower().endswith(ext):
+                        name_clean = name_clean[:-len(ext)]
+                        break
+                base_name = name_clean
+
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', base_name).strip('_')
+            if not clean_name:
+                clean_name = "imported_repo"
+
+            candidate = clean_name
+            counter = 1
+            while db.query(Repository).filter(Repository.name == candidate).first():
+                candidate = f"{clean_name}_{counter}"
+                counter += 1
+            target_repo_name = candidate
+
+            # 3. Create repository in Nuvi
+            repo_desc = description or f"Imported from dump file '{dump_path.name}'"
+            created_repo_dto = RepositoryService.create_repository(
+                db=db,
+                req=RepositoryCreateRequest(
+                    name=target_repo_name,
+                    description=repo_desc,
+                    init_standard_layout=False
+                ),
+                actor=actor,
+                client_ip=client_ip
+            )
+            created_repo = db.query(Repository).filter(Repository.id == created_repo_dto.id).first()
+            if not created_repo:
+                raise RuntimeError("Failed to retrieve newly created repository record.")
+
+            # 4. Load dump into repository
+            revisions_loaded = ArchiveImportService._load_dump(created_repo.fs_path, effective_dump_path)
+            try:
+                latest_rev = svn_engine.get_latest_revision(created_repo.fs_path)
+                if latest_rev > 0:
+                    created_repo.latest_revision = latest_rev
+            except Exception:
+                if revisions_loaded > 0:
+                    created_repo.latest_revision = revisions_loaded
+            db.commit()
+
+            # 5. Extract authors and optionally create users
+            users_created = 0
+            if import_users:
+                authors = set()
+                try:
+                    log_proc = subprocess.run(
+                        ["svn", "log", "-q", f"file://{created_repo.fs_path}"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    if log_proc.returncode == 0:
+                        for line in log_proc.stdout.splitlines():
+                            if "|" in line:
+                                parts = [p.strip() for p in line.split("|")]
+                                if len(parts) >= 2:
+                                    auth = parts[1]
+                                    if auth and auth != "(no author)" and not auth.startswith("("):
+                                        authors.add(auth)
+                except Exception:
+                    pass
+
+                # If svn log was empty or failed, fallback to scanning dump file for svn:author
+                if not authors:
+                    try:
+                        with open(effective_dump_path, "r", encoding="utf-8", errors="ignore") as f:
+                            lines = f.readlines(50000)
+                            for idx, line in enumerate(lines):
+                                if "svn:author" in line and idx + 2 < len(lines):
+                                    auth_line = lines[idx + 2].strip()
+                                    if auth_line and not auth_line.startswith("PROPS-END"):
+                                        authors.add(auth_line)
+                    except Exception:
+                        pass
+
+                for auth in sorted(authors):
+                    clean_auth = auth.strip()
+                    if not clean_auth:
+                        continue
+                    u_rec = db.query(User).filter(User.username.ilike(clean_auth)).first()
+                    if not u_rec:
+                        u_rec = User(
+                            username=clean_auth,
+                            full_name=f"Imported Author ({clean_auth})",
+                            email=f"{clean_auth}@imported.local",
+                            is_active=True,
+                            is_admin=False,
+                            password_hash=SecurityService.hash_password(default_password),
+                            htpasswd_hash=generate_apache_sha(default_password)
+                        )
+                        db.add(u_rec)
+                        users_created += 1
+                if users_created > 0:
+                    db.commit()
+                    try:
+                        AclService.compile_htpasswd(db)
+                    except Exception:
+                        pass
+
+            # 6. Audit log
+            audit = AuditLog(
+                actor=actor,
+                client_ip=client_ip,
+                action_category="REPO",
+                action_name="IMPORT_DUMP_FILE",
+                target_type="repository",
+                target_id=target_repo_name,
+                details_json=json.dumps({
+                    "dump_file": dump_path.name,
+                    "revisions": created_repo.latest_revision,
+                    "users_created": users_created
+                })
+            )
+            db.add(audit)
+            db.commit()
+
+            return ArchiveImportResponse(
+                status="success",
+                repository_id=created_repo.id,
+                repository_name=created_repo.name,
+                latest_revision=created_repo.latest_revision or revisions_loaded,
+                dump_loaded=True,
+                revisions_loaded=created_repo.latest_revision or revisions_loaded,
+                authz_imported=False,
+                groups_created=0,
+                users_created=users_created,
+                rules_created=0,
+                hooks_imported=0,
+                details={
+                    "source_type": "dump_file",
+                    "dump_filename": dump_path.name,
+                    "revisions_count": created_repo.latest_revision or revisions_loaded,
+                    "users_imported": users_created
+                }
+            )
         finally:
             shutil.rmtree(staging_dir, ignore_errors=True)
 

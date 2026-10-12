@@ -26,6 +26,7 @@ from backend.api.models.schema import (
 )
 from backend.api.models.dto import (
     AccessRuleCreateRequest,
+    AccessRuleBatchCreateRequest,
     AccessRuleResponse,
     EffectivePermissionResponse,
     DecisionTraceItem,
@@ -89,6 +90,65 @@ class AclService:
         return AclService._rule_to_dto(rule, repo_name)
 
     @staticmethod
+    def create_batch_rules(db: Session, req: AccessRuleBatchCreateRequest, actor: str = "admin", client_ip: str = "127.0.0.1") -> List[AccessRuleResponse]:
+        if not req.rules:
+            return []
+
+        repos = {r.id: r.name for r in db.query(Repository).all()}
+        created_dtos: List[AccessRuleResponse] = []
+        rule_records = []
+
+        for r_req in req.rules:
+            repo_name = None
+            if r_req.repository_id is not None:
+                repo_name = repos.get(r_req.repository_id)
+                if not repo_name:
+                    raise ValueError(f"Repository ID {r_req.repository_id} not found.")
+
+            ptype = r_req.principal_type.lower()
+            if ptype not in [PrincipalType.USER.value, PrincipalType.GROUP.value, PrincipalType.EVERYONE.value]:
+                raise ValueError(f"Invalid principal_type '{r_req.principal_type}'. Must be 'user', 'group', or 'everyone'.")
+
+            perm = r_req.permission.lower()
+            if perm not in ["rw", "r", ""]:
+                raise ValueError("Invalid permission. Must be 'rw', 'r', or '' (Deny).")
+
+            normalized_path = "/" + r_req.path.strip("/ ") if r_req.path.strip("/ ") else "/"
+
+            rule = AccessRule(
+                repository_id=r_req.repository_id,
+                path=normalized_path,
+                principal_type=PrincipalType(ptype),
+                principal_name="*" if ptype == PrincipalType.EVERYONE.value else r_req.principal_name,
+                permission=PermissionLevel(perm),
+                rule_order=r_req.rule_order
+            )
+            db.add(rule)
+            rule_records.append((rule, repo_name, normalized_path, perm))
+
+        db.commit()
+
+        for rule, repo_name, normalized_path, perm in rule_records:
+            db.refresh(rule)
+            created_dtos.append(AclService._rule_to_dto(rule, repo_name))
+            db.add(AuditLog(
+                actor=actor,
+                client_ip=client_ip,
+                action_category="acl",
+                action_name="rule_create",
+                target_type="access_rule",
+                target_id=str(rule.id),
+                details_json=f'{{"repo": "{repo_name}", "path": "{normalized_path}", "principal": "{rule.principal_name}", "perm": "{perm}"}}'
+            ))
+
+        db.commit()
+
+        # Automatically re-compile authz file once for the entire batch
+        AclService.compile_authz(db)
+
+        return created_dtos
+
+    @staticmethod
     def list_rules(db: Session, repository_id: Optional[int] = None) -> List[AccessRuleResponse]:
         query = db.query(AccessRule)
         if repository_id is not None:
@@ -150,14 +210,12 @@ class AclService:
             "[groups]"
         ]
 
-        # 1. Output Groups section
+        # 1. Output Groups section (only include groups with active members to avoid Apache mod_authz_svn syntax errors)
         groups = db.query(Group).all()
         for g in groups:
             members = [m.user.username for m in g.members if m.user and m.user.is_active]
             if members:
                 lines.append(f"{g.name} = {', '.join(sorted(members))}")
-            else:
-                lines.append(f"{g.name} = ")
 
         lines.append("")
 
@@ -165,17 +223,21 @@ class AclService:
         # Map: section_header -> {principal_str: perm_str}
         sections: Dict[str, Dict[str, str]] = defaultdict(dict)
 
-        # Server administrators always have root RW access
-        admins = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
-        for admin in admins:
-            sections["[/]"][admin.username] = "rw"
-
         repos = {r.id: r for r in db.query(Repository).all()}
         all_rules = db.query(AccessRule).order_by(AccessRule.path, AccessRule.rule_order).all()
 
-        # Track explicit grants per repository:
+        # Server administrators always have global root and per-repository root RW access
+        admins = db.query(User).filter(User.is_admin == True, User.is_active == True).all()
+        for admin in admins:
+            sections["[/]"][admin.username] = "rw"
+            for repo in repos.values():
+                sections[f"[{repo.name}:/]"][admin.username] = "rw"
+
+        # Track explicit grants, denies, and configured paths per repository:
         # repo_id -> { (principal_type, p_key): set of granted paths with r or rw }
         repo_principal_grants: Dict[int, Dict[Tuple[PrincipalType, str], Set[str]]] = defaultdict(lambda: defaultdict(set))
+        repo_principal_denies: Dict[int, Dict[Tuple[PrincipalType, str], Set[str]]] = defaultdict(lambda: defaultdict(set))
+        repo_all_paths: Dict[int, Set[str]] = defaultdict(set)
 
         for r in all_rules:
             repo_obj = repos.get(r.repository_id) if r.repository_id else None
@@ -193,17 +255,38 @@ class AclService:
             perm_val = r.permission.value
             sections[section_header][p_key] = perm_val
 
-            if r.repository_id and perm_val in ("r", "rw"):
-                repo_principal_grants[r.repository_id][(r.principal_type, p_key)].add(path)
+            if r.repository_id:
+                repo_all_paths[r.repository_id].add(path)
+                if perm_val in ("r", "rw"):
+                    repo_principal_grants[r.repository_id][(r.principal_type, p_key)].add(path)
+                elif perm_val == "":
+                    repo_principal_denies[r.repository_id][(r.principal_type, p_key)].add(path)
 
-        # 3. Automatic Path Traversal & Sparse Sibling Exclusion for subpath-only grants
-        for repo_id, principal_grants in repo_principal_grants.items():
-            repo_obj = repos.get(repo_id)
-            if not repo_obj:
-                continue
+        # 3. Automatic Path Traversal, Sibling Exclusion & Auto Grant/Deny Resolution
+        # Rules behavior:
+        # 1) If user has added Grant Path only: all other paths automatically become deny path.
+        # 2) If only Deny Path is added: all other paths automatically become granted path.
+        # 3) If both Grant and Deny paths are added: remaining paths outside grants automatically become deny path.
+        for repo_id, repo_obj in repos.items():
+            principal_grants = repo_principal_grants.get(repo_id, {})
+            principal_denies = repo_principal_denies.get(repo_id, {})
+            all_principals = set(principal_grants.keys()) | set(principal_denies.keys())
 
-            for (p_type, p_key), granted_paths in principal_grants.items():
-                # If root "/" is already granted, the principal has full traversal and inheritance
+            for (p_type, p_key) in all_principals:
+                granted_paths = principal_grants.get((p_type, p_key), set())
+                denied_paths = principal_denies.get((p_type, p_key), set())
+
+                # Condition 2: Deny-Only Mode
+                # If principal has only Deny Path(s) configured in this repository (no explicit Grant Path):
+                # All other paths automatically become granted paths!
+                if denied_paths and not granted_paths:
+                    root_header = f"[{repo_obj.name}:/]"
+                    if p_key not in sections[root_header]:
+                        sections[root_header][p_key] = "rw"
+                    continue
+
+                # Condition 1 (Grant-Only) or Condition 3 (Hybrid):
+                # If root "/" is already granted, root inheritance applies and explicit denies override.
                 if "/" in granted_paths:
                     continue
 
@@ -217,8 +300,7 @@ class AclService:
                         ancestor_paths.add(curr)
                     ancestor_paths.add("/")
 
-                # For each ancestor directory:
-                # 1) Grant implicit read ('r') so the Subversion client can traverse into it
+                # 1) Grant implicit read ('r') on ancestors so the Subversion client can traverse into them
                 for anc in ancestor_paths:
                     header = f"[{repo_obj.name}:{anc}]"
                     if p_key not in sections[header]:
@@ -226,8 +308,13 @@ class AclService:
 
                 # 2) Discover all sibling directories of each ancestor level in the repository
                 # and exclude (deny) any child path that is NOT on the path to an authorized directory
+                known_repo_paths = repo_all_paths.get(repo_id, set()) | granted_paths | denied_paths
+                standard_children = {
+                    "/": {"trunk", "branches", "tags"},
+                    "/trunk": {"code", "hardware", "production", "utilities", "users"}
+                }
+
                 for anc in sorted(ancestor_paths, key=lambda x: (len(x), x)):
-                    # Get children of this ancestor from SVN repository
                     child_dir_names: Set[str] = set()
                     try:
                         res = svn_engine.list_directory(repo_obj.fs_path, anc)
@@ -238,17 +325,19 @@ class AclService:
                         pass
 
                     # Also include any known directory names from other rules or standard layout
-                    for gp in granted_paths:
-                        if gp.startswith(anc if anc != "/" else ""):
-                            rel = gp[len(anc):].strip("/")
-                            if "/" in rel:
+                    for kp in known_repo_paths:
+                        anc_prefix = anc if anc != "/" else ""
+                        if kp.startswith(anc_prefix + "/"):
+                            rel = kp[len(anc_prefix):].strip("/")
+                            if rel:
                                 child_dir_names.add(rel.split("/")[0])
-                    if anc == "/":
-                        child_dir_names.update(["trunk", "branches", "tags"])
+
+                    if anc in standard_children:
+                        child_dir_names.update(standard_children[anc])
 
                     for cname in child_dir_names:
                         cpath = f"{anc.rstrip('/')}/{cname}"
-                        # Check if cpath is an ancestor of ANY granted path, or is itself a granted path
+                        # Check if cpath is an ancestor of ANY granted path, or is itself in granted_paths
                         is_allowed_branch = False
                         for gp in granted_paths:
                             if gp == cpath or gp.startswith(cpath + "/"):
@@ -288,7 +377,7 @@ class AclService:
             f.write(content)
         os.replace(tmp_path, dest_path)
         try:
-            os.chmod(dest_path, 0o644)
+            os.chmod(dest_path, 0o664)
         except Exception:
             pass
 
@@ -317,7 +406,7 @@ class AclService:
             f.write(content)
         os.replace(tmp_path, dest_path)
         try:
-            os.chmod(dest_path, 0o644)
+            os.chmod(dest_path, 0o664)
         except Exception:
             pass
 
@@ -368,6 +457,30 @@ class AclService:
             scope = "repository" if r.repository_id else "server_wide"
             rpath = "/" + r.path.strip("/") if r.path.strip("/") else "/"
             rules_by_scope_path[(scope, rpath)].append(r)
+
+        # Deny-Only Mode resolution:
+        # If principal has only deny path(s) configured in this repository (and no grant paths),
+        # all other paths automatically become granted paths (starting from root 'rw').
+        repo_rules_for_principal = [
+            r for r in rules
+            if r.repository_id == repository_id and (
+                (r.principal_type == PrincipalType.USER and r.principal_name.lower() == username.lower()) or
+                (r.principal_type == PrincipalType.GROUP and r.principal_name in user_groups) or
+                (r.principal_type == PrincipalType.EVERYONE or r.principal_name == "*")
+            )
+        ]
+        has_repo_denies = any(r.permission.value == "" for r in repo_rules_for_principal)
+        has_repo_grants = any(r.permission.value in ("r", "rw") for r in repo_rules_for_principal)
+        if has_repo_denies and not has_repo_grants:
+            effective_perm = "rw"
+            trace.append(DecisionTraceItem(
+                scope="repository_auto_grant",
+                path="/",
+                principal=username,
+                permission="rw",
+                effect="grant",
+                reason="Deny-Only Mode: principal has only deny path(s) configured in this repository; all other paths automatically granted."
+            ))
 
         # Evaluation steps:
         # Traverse path hierarchy from root to target

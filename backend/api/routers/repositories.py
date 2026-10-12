@@ -24,6 +24,7 @@ from backend.api.models.dto import (
     TransactionResponse,
     ArchivePathImportRequest,
     ArchiveImportResponse,
+    DumpPathImportRequest,
     RepositorySupervisorRequest,
     RepositorySupervisorResponse,
 )
@@ -42,7 +43,10 @@ def list_repositories(request: Request, db: Session = Depends(get_db)):
     if user and not user.is_admin:
         allowed_repos = AclService.get_accessible_repositories(db, user)
         allowed_ids = [r.id for r in allowed_repos]
-        return RepositoryService.list_repositories(db, allowed_repo_ids=allowed_ids)
+        repos = RepositoryService.list_repositories(db, allowed_repo_ids=allowed_ids)
+        for r in repos:
+            r.fs_path = ""
+        return repos
     return RepositoryService.list_repositories(db)
 
 @router.post("", response_model=RepositoryResponse, status_code=status.HTTP_201_CREATED, summary="Create a new repository")
@@ -68,7 +72,10 @@ def get_repository(repo_id: int, request: Request, db: Session = Depends(get_db)
         if not AclService.user_has_repo_access(db, user, repo_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to repository forbidden.")
     try:
-        return RepositoryService.get_repository(db, repo_id)
+        repo = RepositoryService.get_repository(db, repo_id)
+        if user and not user.is_admin:
+            repo.fs_path = ""
+        return repo
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -302,6 +309,93 @@ def import_archive_path(
             import_acls=req.import_acls,
             import_users=req.import_users,
             import_hooks=req.import_hooks,
+            default_password=req.default_password or "Welcome123!",
+            actor=actor,
+            client_ip=client_ip
+        )
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/import-dump-file", response_model=ArchiveImportResponse, status_code=status.HTTP_201_CREATED, summary="Import repository from SVN dump file upload (.dump, .svndump, .dump.gz)")
+async def import_dump_file_upload(
+    file: UploadFile = File(..., description="SVN dump file (*.dump, *.svndump, *.dump.gz, *.dump.bz2)"),
+    repo_name: Optional[str] = Form(None, description="Optional target repository name override"),
+    description: Optional[str] = Form(None, description="Optional repository description"),
+    import_users: bool = Form(True, description="Auto-create commit authors found in dump as users"),
+    default_password: Optional[str] = Form("Welcome123!", description="Default password for newly created imported authors"),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Imports a Subversion repository from a standalone dump file (*.dump, *.svndump, *.dump.gz).
+    Creates a new repository, restores the full revision history using svnadmin load,
+    and optionally extracts commit authors to auto-provision user accounts.
+    """
+    user = get_optional_current_user(request, db) if request else None
+    if user and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator privileges required.")
+    client_ip = request.client.host if request and request.client else "127.0.0.1"
+    actor = user.username if user else "admin"
+
+    suffix = Path(file.filename or "upload.dump").suffix or ".dump"
+    tmp_fd, tmp_path_str = tempfile.mkstemp(prefix="nuvi_dump_upload_", suffix=suffix)
+    tmp_path = Path(tmp_path_str)
+
+    try:
+        with open(tmp_fd, "wb") as f_out:
+            shutil.copyfileobj(file.file, f_out)
+
+        effective_repo_name = repo_name.strip() if (repo_name and repo_name.strip()) else None
+        if not effective_repo_name and file.filename:
+            clean_stem = Path(file.filename).name
+            for ext in [".dump.gz", ".svndump.gz", ".dump.bz2", ".svndump.bz2", ".dump", ".svndump", ".dumpfile", ".gz", ".bz2"]:
+                if clean_stem.lower().endswith(ext):
+                    clean_stem = clean_stem[:-len(ext)]
+                    break
+            effective_repo_name = clean_stem
+
+        return ArchiveImportService.import_repository_dump_file(
+            db=db,
+            dump_path=tmp_path,
+            repo_name=effective_repo_name,
+            description=description,
+            import_users=import_users,
+            default_password=default_password or "Welcome123!",
+            actor=actor,
+            client_ip=client_ip
+        )
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+
+@router.post("/import-dump-path", response_model=ArchiveImportResponse, status_code=status.HTTP_201_CREATED, summary="Import repository from server-side SVN dump path")
+def import_dump_path(
+    req: DumpPathImportRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Import repository from an existing dump file path on the server."""
+    user = get_optional_current_user(request, db)
+    if user and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator privileges required.")
+    client_ip = request.client.host if request and request.client else "127.0.0.1"
+    actor = user.username if user else "admin"
+    try:
+        return ArchiveImportService.import_repository_dump_file(
+            db=db,
+            dump_path=Path(req.dump_path),
+            repo_name=req.repo_name,
+            description=req.description,
+            import_users=req.import_users,
             default_password=req.default_password or "Welcome123!",
             actor=actor,
             client_ip=client_ip

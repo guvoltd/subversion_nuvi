@@ -8,6 +8,12 @@ from backend.api.config import config
 
 Base = declarative_base()
 
+# Ensure parent directory of database file exists
+try:
+    config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+
 DATABASE_URL = f"sqlite:///{config.DB_PATH}"
 
 engine = create_engine(
@@ -21,11 +27,18 @@ engine = create_engine(
 def set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA busy_timeout=5000")
-        cursor.close()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass
+        try:
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=5000")
+        except Exception:
+            pass
+        finally:
+            cursor.close()
 
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 
@@ -38,8 +51,12 @@ def get_db():
         db.close()
 
 def init_db():
-    """Initializes all database tables and ensures schema migrations."""
+    """Initializes all database tables, ensures schema migrations, seeds default admin, and generates initial authz/htpasswd."""
     from backend.api.models import schema  # noqa: F401
+    try:
+        config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     Base.metadata.create_all(bind=engine)
 
     # Auto-migrate columns if missing in SQLite
@@ -52,3 +69,53 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+
+    # Ensure default administrator exists and compile authz/htpasswd files
+    from backend.api.models.schema import User
+    from backend.api.services.security_service import ph, generate_apache_sha
+    from backend.api.services.acl_service import AclService
+    from sqlalchemy import func
+
+    db = SessionLocal()
+    try:
+        admin_user = db.query(User).filter(func.lower(User.username) == "admin").first()
+        created_admin = False
+        if not admin_user:
+            # Check if any administrator exists at all
+            any_admin = db.query(User).filter(User.is_admin == True).first()
+            if not any_admin:
+                admin_user = User(
+                    username="admin",
+                    password_hash=ph.hash("admin"),
+                    htpasswd_hash=generate_apache_sha("admin"),
+                    email="admin@localhost",
+                    full_name="Administrator",
+                    is_active=True,
+                    is_admin=True,
+                )
+                db.add(admin_user)
+                db.commit()
+                created_admin = True
+        elif not getattr(admin_user, "htpasswd_hash", None):
+            try:
+                if ph.verify(admin_user.password_hash, "admin"):
+                    admin_user.htpasswd_hash = generate_apache_sha("admin")
+                    db.commit()
+            except Exception:
+                pass
+
+        def _is_missing_or_empty(p):
+            try:
+                return not p.exists() or p.stat().st_size == 0
+            except Exception:
+                return True
+
+        if created_admin or _is_missing_or_empty(config.AUTHZ_FILE) or _is_missing_or_empty(config.HTPASSWD_FILE):
+            try:
+                AclService.compile_authz_file(db)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    finally:
+        db.close()

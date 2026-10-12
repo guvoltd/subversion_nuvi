@@ -36,28 +36,39 @@ def load_env_file(explicit_path: Optional[str] = None) -> Optional[Path]:
     ])
 
     for candidate in candidates:
-        if candidate.is_file():
-            # Try python-dotenv first
-            try:
-                import dotenv
-                dotenv.load_dotenv(candidate, override=False)
-                return candidate
-            except ImportError:
-                # Built-in robust parser if python-dotenv is not available
-                try:
-                    with open(candidate, "r", encoding="utf-8") as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line or line.startswith("#") or "=" not in line:
-                                continue
-                            k, v = line.split("=", 1)
-                            k = k.strip()
-                            v = v.strip().strip("'\"")
-                            if k not in os.environ:
-                                os.environ[k] = v
-                    return candidate
-                except Exception:
-                    pass
+        try:
+            if not candidate.is_file():
+                continue
+        except (PermissionError, OSError):
+            continue
+
+        # Try python-dotenv first
+        try:
+            import dotenv
+            dotenv.load_dotenv(candidate, override=False)
+            return candidate
+        except ImportError:
+            pass
+        except (PermissionError, OSError):
+            continue
+
+        # Built-in robust parser if python-dotenv is not available
+        try:
+            with open(candidate, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k not in os.environ:
+                        os.environ[k] = v
+            return candidate
+        except (PermissionError, OSError):
+            continue
+        except Exception:
+            pass
     return None
 
 def get_env_bool(key: str, default: bool) -> bool:

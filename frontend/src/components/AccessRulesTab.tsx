@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldAlert,
   Plus,
+  Minus,
   Trash2,
   CheckCircle,
   AlertTriangle,
@@ -14,10 +15,17 @@ import {
   List,
   ChevronDown,
   ChevronRight,
-  FolderGit2
+  FolderGit2,
+  Search,
+  Check
 } from 'lucide-react';
 import { AccessRule, Repository, User, Group, EffectivePermission } from '../types';
 import { api } from '../services/api';
+
+export interface PathRuleItem {
+  path: string;
+  type: 'grant' | 'deny';
+}
 
 interface AccessRulesTabProps {
   repositories: Repository[];
@@ -43,14 +51,16 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Add rule modal state with multi-path facility
+  // Add rule modal state with multi-path facility (Grant & Deny paths)
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [ruleScope, setRuleScope] = useState<'server' | 'repo'>('server');
   const [ruleRepoId, setRuleRepoId] = useState<number | null>(null);
-  const [rulePaths, setRulePaths] = useState<string[]>(['/']);
+  const [rulePathItems, setRulePathItems] = useState<PathRuleItem[]>([{ path: '/', type: 'grant' }]);
   const [principalType, setPrincipalType] = useState<'user' | 'group' | 'everyone'>('everyone');
   const [principalName, setPrincipalName] = useState('*');
-  const [permission, setPermission] = useState<'rw' | 'r' | ''>('r');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [userSearchTerm, setUserSearchTerm] = useState<string>('');
+  const [permission, setPermission] = useState<'rw' | 'r' | ''>('rw');
 
   // Evaluator state (nuvi-acl-eval)
   const [evalUsername, setEvalUsername] = useState('');
@@ -123,77 +133,153 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
     });
   }, [filteredRules, groups, users]);
 
+  // Multi-user modal filtering and selection helpers
+  const filteredModalUsers = useMemo(() => {
+    if (!userSearchTerm.trim()) return users;
+    const q = userSearchTerm.toLowerCase();
+    return users.filter(u =>
+      u.username.toLowerCase().includes(q) ||
+      (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q))
+    );
+  }, [users, userSearchTerm]);
+
+  const handleToggleUserSelection = (username: string) => {
+    setSelectedUsers(prev =>
+      prev.includes(username) ? prev.filter(u => u !== username) : [...prev, username]
+    );
+  };
+
+  const handleSelectAllFilteredUsers = () => {
+    setSelectedUsers(prev => {
+      const set = new Set(prev);
+      filteredModalUsers.forEach(u => set.add(u.username));
+      return Array.from(set);
+    });
+  };
+
+  const handleDeselectAllFilteredUsers = () => {
+    if (!userSearchTerm.trim()) {
+      setSelectedUsers([]);
+    } else {
+      const filteredNames = new Set(filteredModalUsers.map(u => u.username));
+      setSelectedUsers(prev => prev.filter(u => !filteredNames.has(u)));
+    }
+  };
+
   // Multi-path helpers
   const handleOpenAddModal = () => {
-    setRulePaths(['/']);
+    setRulePathItems([{ path: '/', type: 'grant' }]);
     setRuleScope('server');
     if (repositories.length > 0) setRuleRepoId(repositories[0].id);
     setPrincipalType('everyone');
     setPrincipalName('*');
-    setPermission('r');
+    setSelectedUsers(users.length > 0 ? [users[0].username] : []);
+    setUserSearchTerm('');
+    setPermission('rw');
     setAddRuleOpen(true);
   };
 
-  const handleAddPathRow = () => {
-    setRulePaths(prev => [...prev, '/']);
+  const handleAddGrantPathRow = () => {
+    setRulePathItems(prev => [...prev, { path: '/', type: 'grant' }]);
   };
 
-  const handleRemovePathRow = (index: number) => {
-    if (rulePaths.length <= 1) return;
-    setRulePaths(prev => prev.filter((_, i) => i !== index));
+  const handleAddDenyPathRow = () => {
+    setRulePathItems(prev => [...prev, { path: '/', type: 'deny' }]);
   };
 
-  const handlePathChange = (index: number, val: string) => {
-    setRulePaths(prev => {
+  const handleTogglePathType = (index: number) => {
+    setRulePathItems(prev => {
       const updated = [...prev];
-      updated[index] = val;
+      updated[index] = {
+        ...updated[index],
+        type: updated[index].type === 'grant' ? 'deny' : 'grant'
+      };
       return updated;
     });
   };
 
-  const handleQuickAddCommonPath = (commonPath: string) => {
-    if (!rulePaths.includes(commonPath)) {
-      if (rulePaths.length === 1 && rulePaths[0] === '/') {
-        setRulePaths([commonPath]);
-      } else {
-        setRulePaths(prev => [...prev, commonPath]);
+  const handleRemovePathRow = (index: number) => {
+    if (rulePathItems.length <= 1) return;
+    setRulePathItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handlePathChange = (index: number, val: string) => {
+    setRulePathItems(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], path: val };
+      return updated;
+    });
+  };
+
+  const handleQuickAddCommonPath = (commonPath: string, type: 'grant' | 'deny' = 'grant') => {
+    setRulePathItems(prev => {
+      if (prev.length === 1 && prev[0].path === '/') {
+        return [{ path: commonPath, type }];
       }
-    }
+      return [...prev, { path: commonPath, type }];
+    });
   };
 
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const cleanedPaths = Array.from(new Set(
-        rulePaths
-          .map(p => p.trim())
-          .filter(Boolean)
-          .map(p => (p.startsWith('/') ? p : '/' + p))
-      ));
+      const cleanedItems = rulePathItems
+        .map(item => ({
+          path: item.path.trim().startsWith('/') ? item.path.trim() : '/' + item.path.trim(),
+          type: item.type
+        }))
+        .filter(item => Boolean(item.path));
 
-      if (cleanedPaths.length === 0) {
-        cleanedPaths.push('/');
+      if (cleanedItems.length === 0) {
+        cleanedItems.push({ path: '/', type: 'grant' });
       }
 
-      const pName = principalType === 'everyone' ? '*' : principalName;
       const targetRepoId = ruleScope === 'repo' ? ruleRepoId : null;
+      let targetPrincipals: { type: 'user' | 'group' | 'everyone'; name: string }[] = [];
 
-      // Submit all path access rules in a single go
-      for (const p of cleanedPaths) {
-        await api.createRule({
-          repository_id: targetRepoId,
-          path: p,
-          principal_type: principalType,
-          principal_name: pName,
-          permission: permission,
-          rule_order: 0
-        });
+      if (principalType === 'user') {
+        if (selectedUsers.length === 0) {
+          setMessage({ type: 'error', text: 'Please select at least one user by checking the box.' });
+          return;
+        }
+        targetPrincipals = selectedUsers.map(u => ({ type: 'user', name: u }));
+      } else if (principalType === 'group') {
+        targetPrincipals = [{ type: 'group', name: principalName }];
+      } else {
+        targetPrincipals = [{ type: 'everyone', name: '*' }];
       }
+
+      // Collect batch payload
+      const rulesToCreate: Array<{
+        repository_id: number | null;
+        path: string;
+        principal_type: string;
+        principal_name: string;
+        permission: string;
+        rule_order: number;
+      }> = [];
+
+      for (const p of targetPrincipals) {
+        for (const item of cleanedItems) {
+          const permVal = item.type === 'grant' ? (permission === '' ? 'rw' : permission) : '';
+          rulesToCreate.push({
+            repository_id: targetRepoId,
+            path: item.path,
+            principal_type: p.type,
+            principal_name: p.name,
+            permission: permVal,
+            rule_order: 0
+          });
+        }
+      }
+
+      await api.createRulesBatch(rulesToCreate);
 
       setAddRuleOpen(false);
       setMessage({
         type: 'success',
-        text: `Successfully added ${cleanedPaths.length} access rule(s) and recompiled authz.`
+        text: `Successfully configured ${rulesToCreate.length} access rule(s) across ${targetPrincipals.length} ${principalType === 'user' ? 'user(s)' : 'principal'} and recompiled authz.`
       });
       loadRules();
       setTimeout(() => setMessage(null), 4000);
@@ -856,25 +942,57 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
                   </div>
                 )}
 
-                {/* Multi-Path Repository Path Facility with Plus Button */}
+                {/* Multi-Path Repository Path Facility: + Grant Path & - Deny Path */}
                 <div className="form-group">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
                     <label className="form-label" style={{ marginBottom: 0 }}>
                       Repository Path(s)
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 'normal', marginLeft: '0.5rem' }}>
-                        ({rulePaths.length} path{rulePaths.length === 1 ? '' : 's'} configured)
+                        ({rulePathItems.length} configured: {rulePathItems.filter(p => p.type === 'grant').length} granted, {rulePathItems.filter(p => p.type === 'deny').length} denied)
                       </span>
                     </label>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                      onClick={handleAddPathRow}
-                      title="Add another repository path to grant in single go"
-                    >
-                      <Plus size={13} />
-                      Add Path
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          backgroundColor: 'rgba(52, 211, 153, 0.15)',
+                          color: '#34d399',
+                          border: '1px solid rgba(52, 211, 153, 0.35)',
+                          padding: '0.25rem 0.55rem',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontWeight: 600
+                        }}
+                        onClick={handleAddGrantPathRow}
+                        title="Add a path to grant access"
+                      >
+                        <Plus size={13} />
+                        Grant Path
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          padding: '0.25rem 0.55rem',
+                          fontSize: '0.75rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontWeight: 600
+                        }}
+                        onClick={handleAddDenyPathRow}
+                        title="Add a path to deny access"
+                      >
+                        <Minus size={13} />
+                        Deny Path
+                      </button>
+                    </div>
                   </div>
 
                   {/* List of path inputs */}
@@ -888,28 +1006,58 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
                       paddingRight: '0.2rem'
                     }}
                   >
-                    {rulePaths.map((p, idx) => (
+                    {rulePathItems.map((p, idx) => (
                       <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        {/* Type toggle badge */}
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePathType(idx)}
+                          style={{
+                            padding: '0.35rem 0.55rem',
+                            borderRadius: '6px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.04em',
+                            cursor: 'pointer',
+                            minWidth: '68px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: p.type === 'grant' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                            color: p.type === 'grant' ? '#34d399' : '#f87171',
+                            border: p.type === 'grant' ? '1px solid rgba(52, 211, 153, 0.45)' : '1px solid rgba(239, 68, 68, 0.45)'
+                          }}
+                          title="Click to toggle between GRANT and DENY"
+                        >
+                          {p.type === 'grant' ? '+ GRANT' : '- DENY'}
+                        </button>
+
                         <input
                           type="text"
                           className="form-input"
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
-                          value={p}
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.85rem',
+                            flex: 1,
+                            borderColor: p.type === 'grant' ? 'rgba(52, 211, 153, 0.35)' : 'rgba(239, 68, 68, 0.35)'
+                          }}
+                          value={p.path}
                           onChange={e => handlePathChange(idx, e.target.value)}
-                          placeholder="e.g. / or /trunk/testRepo"
+                          placeholder={p.type === 'grant' ? 'e.g. /trunk/code' : 'e.g. /trunk/hardware'}
                           required
                         />
+
                         {/* Plus button right on the row to add another path in single go */}
                         <button
                           type="button"
                           className="btn btn-secondary btn-sm"
                           style={{ padding: '0.45rem 0.6rem' }}
-                          onClick={handleAddPathRow}
-                          title="Add another repository path"
+                          onClick={p.type === 'grant' ? handleAddGrantPathRow : handleAddDenyPathRow}
+                          title={p.type === 'grant' ? 'Add another Grant path' : 'Add another Deny path'}
                         >
                           <Plus size={14} />
                         </button>
-                        {rulePaths.length > 1 && (
+                        {rulePathItems.length > 1 && (
                           <button
                             type="button"
                             className="btn btn-danger btn-sm"
@@ -932,21 +1080,81 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
                         key={cp}
                         type="button"
                         style={{
-                          background: 'rgba(59, 130, 246, 0.12)',
-                          border: '1px solid rgba(59, 130, 246, 0.25)',
-                          color: '#93c5fd',
+                          background: 'rgba(52, 211, 153, 0.12)',
+                          border: '1px solid rgba(52, 211, 153, 0.25)',
+                          color: '#6ee7b7',
                           borderRadius: '4px',
                           padding: '0.15rem 0.5rem',
                           fontSize: '0.75rem',
                           cursor: 'pointer',
                           fontFamily: 'var(--font-mono)'
                         }}
-                        onClick={() => handleQuickAddCommonPath(cp)}
-                        title={`Add ${cp} to paths`}
+                        onClick={() => handleQuickAddCommonPath(cp, 'grant')}
+                        title={`Add ${cp} as Grant`}
                       >
                         + {cp}
                       </button>
                     ))}
+                    {['/trunk/hardware', '/trunk/production'].map(cp => (
+                      <button
+                        key={cp}
+                        type="button"
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                          color: '#fca5a5',
+                          borderRadius: '4px',
+                          padding: '0.15rem 0.5rem',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontFamily: 'var(--font-mono)'
+                        }}
+                        onClick={() => handleQuickAddCommonPath(cp, 'deny')}
+                        title={`Add ${cp} as Deny`}
+                      >
+                        - {cp}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Dynamic Rule Behavior Explanation Box */}
+                  <div style={{
+                    marginTop: '0.65rem',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.45,
+                    backgroundColor: rulePathItems.filter(p => p.type === 'deny').length === 0
+                      ? 'rgba(52, 211, 153, 0.08)'
+                      : rulePathItems.filter(p => p.type === 'grant').length === 0
+                        ? 'rgba(239, 68, 68, 0.08)'
+                        : 'rgba(245, 158, 11, 0.08)',
+                    border: rulePathItems.filter(p => p.type === 'deny').length === 0
+                      ? '1px solid rgba(52, 211, 153, 0.25)'
+                      : rulePathItems.filter(p => p.type === 'grant').length === 0
+                        ? '1px solid rgba(239, 68, 68, 0.25)'
+                        : '1px solid rgba(245, 158, 11, 0.25)',
+                    color: rulePathItems.filter(p => p.type === 'deny').length === 0
+                      ? '#34d399'
+                      : rulePathItems.filter(p => p.type === 'grant').length === 0
+                        ? '#f87171'
+                        : '#fbbf24'
+                  }}>
+                    {rulePathItems.filter(p => p.type === 'deny').length === 0 && (
+                      <div>
+                        <strong>Grant-Only Mode:</strong> Only configured path(s) are granted (e.g. <code>/trunk/code</code>). All remaining sibling and unlisted repository paths automatically become denied during checkout.
+                      </div>
+                    )}
+                    {rulePathItems.filter(p => p.type === 'grant').length === 0 && (
+                      <div>
+                        <strong>Deny-Only Mode:</strong> Configured path(s) are denied (e.g. <code>/trunk/hardware</code>). All other repository paths automatically become granted.
+                      </div>
+                    )}
+                    {rulePathItems.filter(p => p.type === 'grant').length > 0 && rulePathItems.filter(p => p.type === 'deny').length > 0 && (
+                      <div>
+                        <strong>Hybrid Mode:</strong> Configured grant paths are accessible and denied paths are excluded. All remaining unlisted paths automatically become denied.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -959,33 +1167,261 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
                     onChange={e => {
                       const pt = e.target.value as any;
                       setPrincipalType(pt);
-                      if (pt === 'everyone') setPrincipalName('*');
-                      else if (pt === 'user' && users.length > 0) setPrincipalName(users[0].username);
-                      else if (pt === 'group' && groups.length > 0) setPrincipalName(groups[0].name);
+                      if (pt === 'everyone') {
+                        setPrincipalName('*');
+                      } else if (pt === 'user') {
+                        if (selectedUsers.length === 0 && users.length > 0) {
+                          setSelectedUsers([users[0].username]);
+                        }
+                      } else if (pt === 'group' && groups.length > 0) {
+                        setPrincipalName(groups[0].name);
+                      }
                     }}
                   >
                     <option value="everyone">Everyone (*)</option>
                     <option value="group">Security Group</option>
-                    <option value="user">Individual User</option>
+                    <option value="user">Individual User(s)</option>
                   </select>
                 </div>
 
                 {/* User / Group Selector */}
                 {principalType === 'user' && (
-                  <div className="form-group">
-                    <label className="form-label">Select User</label>
-                    <select
-                      className="form-select"
-                      value={principalName}
-                      onChange={e => setPrincipalName(e.target.value)}
-                      required
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      <label className="form-label" style={{ marginBottom: 0 }}>
+                        Select Users (Check multiple)
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: selectedUsers.length > 0 ? 'rgba(59, 130, 246, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                            color: selectedUsers.length > 0 ? '#60a5fa' : 'var(--text-dim)',
+                            border: selectedUsers.length > 0 ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(148, 163, 184, 0.2)',
+                            fontSize: '0.72rem',
+                            padding: '0.15rem 0.5rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {selectedUsers.length} of {users.length} selected
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{
+                            padding: '0.15rem 0.45rem',
+                            fontSize: '0.72rem',
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                            color: '#93c5fd',
+                            border: '1px solid rgba(59, 130, 246, 0.3)'
+                          }}
+                          onClick={handleSelectAllFilteredUsers}
+                          title="Select all visible users"
+                        >
+                          Select All
+                        </button>
+                        {selectedUsers.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            style={{
+                              padding: '0.15rem 0.45rem',
+                              fontSize: '0.72rem',
+                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                              color: '#f87171',
+                              border: '1px solid rgba(239, 68, 68, 0.25)'
+                            }}
+                            onClick={handleDeselectAllFilteredUsers}
+                            title="Deselect users"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Search box for filtering listed users */}
+                    <div style={{ position: 'relative', marginBottom: '0.45rem' }}>
+                      <Search
+                        size={14}
+                        style={{
+                          position: 'absolute',
+                          left: '0.65rem',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Filter users by username, name, or email..."
+                        value={userSearchTerm}
+                        onChange={e => setUserSearchTerm(e.target.value)}
+                        style={{
+                          paddingLeft: '2.1rem',
+                          paddingRight: userSearchTerm ? '2rem' : '0.75rem',
+                          fontSize: '0.82rem',
+                          height: '34px'
+                        }}
+                      />
+                      {userSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setUserSearchTerm('')}
+                          style={{
+                            position: 'absolute',
+                            right: '0.6rem',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Scrollable Checkbox List */}
+                    <div
+                      style={{
+                        maxHeight: '175px',
+                        overflowY: 'auto',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: selectedUsers.length === 0 ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        padding: '0.35rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.25rem'
+                      }}
                     >
-                      {users.map(u => (
-                        <option key={u.id} value={u.username}>
-                          {u.username} {u.full_name ? `(${u.full_name})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      {filteredModalUsers.length === 0 ? (
+                        <div style={{ padding: '0.8rem', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.82rem' }}>
+                          {users.length === 0 ? 'No users available in the system.' : `No users match "${userSearchTerm}".`}
+                        </div>
+                      ) : (
+                        filteredModalUsers.map(u => {
+                          const isChecked = selectedUsers.includes(u.username);
+                          return (
+                            <div
+                              key={u.id}
+                              onClick={() => handleToggleUserSelection(u.username)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.6rem',
+                                padding: '0.4rem 0.55rem',
+                                borderRadius: '5px',
+                                cursor: 'pointer',
+                                backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.16)' : 'transparent',
+                                border: isChecked ? '1px solid rgba(59, 130, 246, 0.35)' : '1px solid transparent',
+                                transition: 'background-color 0.12s ease'
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleToggleUserSelection(u.username)}
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  cursor: 'pointer',
+                                  accentColor: '#3b82f6',
+                                  width: '15px',
+                                  height: '15px',
+                                  flexShrink: 0
+                                }}
+                              />
+                              <div
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  borderRadius: '50%',
+                                  backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.25)' : 'rgba(148, 163, 184, 0.15)',
+                                  color: isChecked ? '#93c5fd' : '#94a3b8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  flexShrink: 0
+                                }}
+                              >
+                                {u.username[0]?.toUpperCase() || 'U'}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, fontSize: '0.83rem', color: isChecked ? '#93c5fd' : 'var(--text-bright)' }}>
+                                    {u.username}
+                                  </span>
+                                  {u.full_name && (
+                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                      ({u.full_name})
+                                    </span>
+                                  )}
+                                  {u.email && u.email !== u.username && (
+                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      • {u.email}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {isChecked && (
+                                <Check size={14} color="#60a5fa" style={{ flexShrink: 0 }} />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Validation hint if 0 selected */}
+                    {selectedUsers.length === 0 ? (
+                      <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <AlertTriangle size={12} />
+                        Please select at least one user by checking the box.
+                      </div>
+                    ) : (
+                      /* Compact selected badges bar */
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Selected:</span>
+                        {selectedUsers.slice(0, 4).map(uName => (
+                          <span
+                            key={uName}
+                            style={{
+                              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                              color: '#93c5fd',
+                              borderRadius: '4px',
+                              padding: '0.1rem 0.4rem',
+                              fontSize: '0.72rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem'
+                            }}
+                          >
+                            {uName}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserSelection(uName)}
+                              style={{ background: 'none', border: 'none', color: '#93c5fd', cursor: 'pointer', padding: 0, fontSize: '0.72rem' }}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                        {selectedUsers.length > 4 && (
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            +{selectedUsers.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1007,27 +1443,47 @@ export const AccessRulesTab: React.FC<AccessRulesTabProps> = ({ repositories }) 
                   </div>
                 )}
 
-                {/* Permission Level */}
-                <div className="form-group">
-                  <label className="form-label">Permission Level</label>
-                  <select
-                    className="form-select"
-                    value={permission}
-                    onChange={e => setPermission(e.target.value as any)}
-                  >
-                    <option value="rw">Read / Write (rw)</option>
-                    <option value="r">Read Only (r)</option>
-                    <option value="">Deny (Explicit No Access)</option>
-                  </select>
-                </div>
+                {/* Permission Level for Granted Paths */}
+                {rulePathItems.some(p => p.type === 'grant') ? (
+                  <div className="form-group">
+                    <label className="form-label">Granted Paths Permission Level</label>
+                    <select
+                      className="form-select"
+                      value={permission === '' ? 'rw' : permission}
+                      onChange={e => setPermission(e.target.value as any)}
+                    >
+                      <option value="rw">Read / Write (rw)</option>
+                      <option value="r">Read Only (r)</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label className="form-label">Permission Level</label>
+                    <div style={{
+                      padding: '0.45rem 0.75rem',
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      borderRadius: '6px',
+                      color: '#f87171',
+                      fontSize: '0.85rem',
+                      fontWeight: 500
+                    }}>
+                      Deny (Explicit No Access to configured paths)
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setAddRuleOpen(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Access Rule{rulePaths.length > 1 ? `s (${rulePaths.length})` : ''}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={principalType === 'user' && selectedUsers.length === 0}
+                >
+                  Save Access Rule{((principalType === 'user' ? selectedUsers.length : 1) * rulePathItems.length) > 1 ? `s (${(principalType === 'user' ? selectedUsers.length : 1) * rulePathItems.length})` : ''}
                 </button>
               </div>
             </form>

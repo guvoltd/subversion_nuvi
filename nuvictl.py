@@ -62,15 +62,76 @@ def print_table(headers, rows):
         print(header_fmt.format(*[str(v) for v in row]))
 
 def cmd_status(args):
-    init_db()
-    db = SessionLocal()
+    # 1. Try querying the live API daemon first (permission-independent, fast)
     try:
+        import urllib.request
+        import json
+        url = f"http://127.0.0.1:{config.PORT}/api/v1/server/status"
+        req = urllib.request.Request(url, headers={"User-Agent": "nuvictl"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if resp.status == 200:
+                status_data = json.loads(resp.read().decode())
+                uptime_sec = int(status_data.get("uptime_seconds", 0))
+                days, rem = divmod(uptime_sec, 86400)
+                hours, rem = divmod(rem, 3600)
+                mins, secs = divmod(rem, 60)
+                uptime_str = f"{days}d {hours}h {mins}m {secs}s" if days > 0 else (f"{hours}h {mins}m {secs}s" if hours > 0 else f"{mins}m {secs}s")
+                print("=== Subversion Nuvi Server Status ===")
+                print(f"Daemon Status:      Running (API port {config.PORT})")
+                print(f"Server Name:        {status_data.get('server_name', config.SERVER_NAME)}")
+                print(f"Engine Version:     {status_data.get('version', '1.16.3 (Subversion 1.16.3)')}")
+                print(f"Uptime:             {uptime_str}")
+                print(f"Repositories:       {status_data.get('repositories_count', 0)}")
+                print(f"Total Revisions:    {status_data.get('total_revisions', 0)}")
+                print(f"Storage Allocated:  {(status_data.get('total_storage_bytes', 0) / (1024*1024)):.2f} MB")
+                print(f"Active Locks:       {status_data.get('active_locks_count', 0)}")
+                print(f"Uncommitted Txns:   {status_data.get('uncommitted_txns_count', 0)}")
+                print(f"CPU Percent:        {status_data.get('cpu_percent', 0.0)}%")
+                print(f"Memory Used:        {status_data.get('memory_used_mb', 0.0):.1f} MB")
+                print(f"Repositories Root:  {config.REPOSITORIES_ROOT}")
+                print(f"Authz ACL File:     {config.AUTHZ_FILE}")
+                print(f"Htpasswd File:      {config.HTPASSWD_FILE}")
+                print(f"Config Source:      {config.ENV_FILE_LOADED or 'Defaults / Environment'}")
+                return
+    except Exception:
+        pass
+
+    # 2. Daemon is offline or unreachable - direct database inspection
+    try:
+        config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    if not config.DB_PATH.exists():
+        try:
+            init_db()
+        except Exception:
+            print("=== Subversion Nuvi Server Status ===")
+            print("Daemon Status:      Stopped")
+            print(f"Server Name:        {config.SERVER_NAME}")
+            print("Engine Version:     1.16.3 (Subversion 1.16.3)")
+            print(f"Database:           Not yet initialized ({config.DB_PATH})")
+            print(f"Repositories Root:  {config.REPOSITORIES_ROOT}")
+            print(f"Config Source:      {config.ENV_FILE_LOADED or 'Defaults / Environment'}")
+            print("\n[NOTE] Database has not been initialized yet.")
+            print("       Start the daemon ('sudo systemctl start nuvi-api') or run 'sudo nuvictl status'.")
+            return
+
+    try:
+        init_db()
+    except Exception:
+        pass
+
+    db = None
+    try:
+        db = SessionLocal()
         from backend.api.routers.server import get_server_status
         status = get_server_status(db)
         uptime_hours = int(status.uptime_seconds // 3600)
         uptime_mins = int((status.uptime_seconds % 3600) // 60)
         uptime_secs = int(status.uptime_seconds % 60)
         print("=== Subversion Nuvi Server Status ===")
+        print("Daemon Status:      Offline (Direct database inspection)")
         print(f"Server Name:        {status.server_name}")
         print(f"Engine Version:     {status.version}")
         print(f"Uptime:             {uptime_hours}h {uptime_mins}m {uptime_secs}s")
@@ -85,8 +146,19 @@ def cmd_status(args):
         print(f"Authz ACL File:     {config.AUTHZ_FILE}")
         print(f"Htpasswd File:      {config.HTPASSWD_FILE}")
         print(f"Config Source:      {config.ENV_FILE_LOADED or 'Defaults / Environment'}")
+    except Exception as e:
+        print("=== Subversion Nuvi Server Status ===")
+        print("Daemon Status:      Stopped")
+        print(f"Server Name:        {config.SERVER_NAME}")
+        print("Engine Version:     1.16.3 (Subversion 1.16.3)")
+        print(f"Repositories Root:  {config.REPOSITORIES_ROOT}")
+        print(f"Config Source:      {config.ENV_FILE_LOADED or 'Defaults / Environment'}")
+        print(f"\n[ERROR] Unable to access database ({config.DB_PATH}): {e}")
+        print("       Please run with sudo or verify group permissions:")
+        print("       sudo usermod -aG subversion $USER")
     finally:
-        db.close()
+        if db:
+            db.close()
 
 def cmd_config(args):
     print("=== Subversion Nuvi Active Configuration ===")
@@ -179,6 +251,30 @@ def cmd_repo(args):
             print(f"  Groups created:     {res.groups_created}")
             print(f"  Users created:      {res.users_created}")
             print(f"  Hooks installed:    {res.hooks_imported}")
+
+        elif args.repo_action == "import-dump":
+            from backend.api.services.archive_import_service import ArchiveImportService
+            from pathlib import Path
+            res = ArchiveImportService.import_repository_dump_file(
+                db=db,
+                dump_path=Path(args.dump_path),
+                repo_name=args.name,
+                description=getattr(args, "desc", None),
+                import_users=not args.no_users,
+                default_password=args.default_password or "Welcome123!",
+                actor="cli"
+            )
+            print(f"Successfully imported dump into repository '{res.repository_name}' (ID: {res.repository_id}).")
+            print(f"  Revisions loaded:   {res.revisions_loaded}")
+            print(f"  Users created:      {res.users_created}")
+
+        elif args.repo_action in ("sync", "fix-permissions"):
+            from pathlib import Path
+            target_path = Path(args.path) if getattr(args, "path", None) else None
+            synced = RepositoryService.scan_and_sync_repositories(db, search_dir=target_path)
+            print(f"Synchronized and enforced permissions across {len(synced)} repository(ies):")
+            for rep in synced:
+                print(f"  • {rep.name} (Rev: {rep.latest_revision}) at {rep.fs_path}")
     finally:
         db.close()
 
@@ -318,6 +414,20 @@ def main():
     p_import.add_argument("--no-acls", action="store_true", help="Do not import authz permissions")
     p_import.add_argument("--no-users", action="store_true", help="Do not import users or htpasswd hashes")
     p_import.add_argument("--no-hooks", action="store_true", help="Do not import hook scripts")
+
+    p_import_dump = repo_subs.add_parser("import-dump", help="Import repository from a standalone .dump / .svndump / .dump.gz file")
+    p_import_dump.add_argument("dump_path", help="Path to .dump, .svndump, or .dump.gz file")
+    p_import_dump.add_argument("--name", default=None, help="Target repository name (defaults to dump base name)")
+    p_import_dump.add_argument("--desc", default=None, help="Optional repository description")
+    p_import_dump.add_argument("--no-users", action="store_true", help="Do not auto-create commit authors as users")
+    p_import_dump.add_argument("--default-password", default="Welcome123!", help="Default password for newly created imported authors")
+
+    p_sync = repo_subs.add_parser("sync", help="Scan and sync permissions for repositories copied into storage root")
+    p_sync.add_argument("path", nargs="?", default=None, help="Optional path to specific repository or folder")
+
+    p_fix = repo_subs.add_parser("fix-permissions", help="Fix permissions, ownership, and sync repositories")
+    p_fix.add_argument("path", nargs="?", default=None, help="Optional path to specific repository or folder")
+
     p_repo.set_defaults(func=cmd_repo)
 
     # Users

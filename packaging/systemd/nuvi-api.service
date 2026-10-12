@@ -1,28 +1,44 @@
 [Unit]
 Description=Subversion Nuvi - Management API & Web Console Service
 Documentation=https://github.com/nuvi/subversion-nuvi
-After=network.target local-fs.target
+After=network.target network-online.target local-fs.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=subversion
 Group=subversion
+UMask=0002
 WorkingDirectory=/opt/nuvi
+
 EnvironmentFile=-/etc/nuvi/nuvi.env
 EnvironmentFile=-/opt/nuvi/.env
 Environment="PATH=/opt/nuvi/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH=/opt/nuvi"
 Environment="NUVI_ENV=production"
-ExecStart=/opt/nuvi/venv/bin/python3 -m backend.api.main
+
+ExecStart=/opt/nuvi/venv/bin/uvicorn backend.api.main:app --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=5s
 
-# Security hardening
+# Security hardening & sandboxing
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/nuvi/data /var/log/nuvi
+# Set to false to allow custom data/repository storage roots located under /home
+ProtectHome=false
 PrivateTmp=true
-ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictRealtime=true
+
+# Managed directories (systemd auto-creates these with proper ownership)
+LogsDirectory=nuvi
+LogsDirectoryMode=0775
+StateDirectory=nuvi
+StateDirectoryMode=0775
+
+# Whitelist application paths outside standard directories
+ReadWritePaths=-/opt/nuvi/data -/var/nuvi -/home
 
 # Resource limits
 LimitNOFILE=65536

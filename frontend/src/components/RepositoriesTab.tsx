@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FolderGit2,
   Plus,
@@ -12,10 +12,12 @@ import {
   FolderTree,
   Download,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  Upload
 } from 'lucide-react';
-import { Repository, RepositoryStats, ArchiveImportResponse } from '../types';
+import { Repository, RepositoryStats, ArchiveImportResponse, ServerConfig } from '../types';
 import { api } from '../services/api';
+import { buildCheckoutUrl } from '../utils/checkoutUrl';
 import { ImportArchiveModal } from './ImportArchiveModal';
 import { ExportRepoModal } from './ExportRepoModal';
 import { SupervisorsModal } from './SupervisorsModal';
@@ -50,6 +52,11 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
   const [exportRepo, setExportRepo] = useState<Repository | null>(null);
   const [supervisorsModalOpen, setSupervisorsModalOpen] = useState(false);
   const [supervisorsRepo, setSupervisorsRepo] = useState<Repository | null>(null);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+
+  useEffect(() => {
+    api.getServerConfig().then(setServerConfig).catch(() => {});
+  }, []);
 
   const handleOpenExport = (repo: Repository) => {
     setExportRepo(repo);
@@ -89,7 +96,7 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
   };
 
   const handleCopyCheckout = (repoName: string) => {
-    const url = `${window.location.origin}/svn/${repoName}`;
+    const url = buildCheckoutUrl(repoName, serverConfig);
     navigator.clipboard.writeText(`svn checkout ${url}`);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
@@ -171,8 +178,8 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
         {isAdmin && (
           <div style={{ display: 'flex', gap: '0.6rem' }}>
             <button className="btn btn-secondary" onClick={() => setImportModalOpen(true)}>
-              <Archive size={16} />
-              Import Archive (.zip)
+              <Upload size={16} />
+              Import Repository (ZIP / Dump)
             </button>
             <button className="btn btn-primary" onClick={onOpenCreateModal}>
               <Plus size={16} />
@@ -318,7 +325,7 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
                   fontSize: '0.85rem'
                 }}>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    svn checkout {window.location.origin}/svn/{selectedRepo.name}
+                    svn checkout {buildCheckoutUrl(selectedRepo.name, serverConfig)}
                   </span>
                   <button
                     className="btn btn-secondary btn-sm"
@@ -332,57 +339,80 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
               </div>
 
               {/* Details Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                <div>
-                  <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>UUID:</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{selectedRepo.uuid}</div>
-                </div>
-                <div>
-                  <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Storage Path:</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
-                    {selectedRepo.fs_path}
+              {isAdmin ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>UUID:</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{selectedRepo.uuid}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Storage Path:</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                      {selectedRepo.fs_path}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Filesystem Type:</div>
+                    <div>{selectedRepo.fs_type.toUpperCase()} (Format {selectedRepo.fs_format})</div>
+                  </div>
+                  <div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Latest Revision:</div>
+                    <div style={{ fontWeight: 600 }}>r{selectedRepo.latest_revision}</div>
                   </div>
                 </div>
-                <div>
-                  <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Filesystem Type:</div>
-                  <div>{selectedRepo.fs_type.toUpperCase()} (Format {selectedRepo.fs_format})</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Latest Revision:</div>
+                    <div style={{ fontWeight: 600 }}>r{selectedRepo.latest_revision}</div>
+                  </div>
+                  {selectedRepo.latest_author && (
+                    <div>
+                      <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Latest Author:</div>
+                      <div>{selectedRepo.latest_author}</div>
+                    </div>
+                  )}
+                  {selectedRepo.description && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Description:</div>
+                      <div style={{ color: 'var(--text-muted)' }}>{selectedRepo.description}</div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <div style={{ color: 'var(--text-dim)', marginBottom: '0.2rem' }}>Latest Revision:</div>
-                  <div style={{ fontWeight: 600 }}>r{selectedRepo.latest_revision}</div>
-                </div>
-              </div>
+              )}
 
-              {/* Live Storage Metrics */}
-              <div style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.4)',
-                borderRadius: '8px',
-                padding: '1rem',
-                border: '1px solid var(--border-subtle)',
-                marginBottom: '1.5rem'
-              }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
-                  Live Storage Metrics
-                </div>
-                {statsLoading ? (
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Calculating storage footprint...</div>
-                ) : repoStats ? (
-                  <div style={{ display: 'flex', gap: '2rem', fontSize: '0.875rem' }}>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Disk Usage: </span>
-                      <strong>{repoStats.total_size_formatted}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Active Locks: </span>
-                      <strong>{repoStats.active_locks_count}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Dangling Txns: </span>
-                      <strong>{repoStats.uncommitted_txns_count}</strong>
-                    </div>
+              {/* Live Storage Metrics (Admin only) */}
+              {isAdmin && (
+                <div style={{
+                  backgroundColor: 'rgba(15, 23, 42, 0.4)',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  border: '1px solid var(--border-subtle)',
+                  marginBottom: '1.5rem'
+                }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+                    Live Storage Metrics
                   </div>
-                ) : null}
-              </div>
+                  {statsLoading ? (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Calculating storage footprint...</div>
+                  ) : repoStats ? (
+                    <div style={{ display: 'flex', gap: '2rem', fontSize: '0.875rem' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Disk Usage: </span>
+                        <strong>{repoStats.total_size_formatted}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Active Locks: </span>
+                        <strong>{repoStats.active_locks_count}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Dangling Txns: </span>
+                        <strong>{repoStats.uncommitted_txns_count}</strong>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               {/* Layout Init Prompt if Rev 0 (Admin only) */}
               {isAdmin && selectedRepo.latest_revision === 0 && (

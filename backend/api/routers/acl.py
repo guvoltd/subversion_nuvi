@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from backend.api.db import get_db
 from backend.api.models.dto import (
     AccessRuleCreateRequest,
+    AccessRuleBatchCreateRequest,
     AccessRuleResponse,
     EffectivePermissionRequest,
     EffectivePermissionResponse,
@@ -36,6 +37,18 @@ def create_rule(req: AccessRuleCreateRequest, request: Request, db: Session = De
     actor = user.username if user else "admin"
     try:
         return AclService.create_rule(db, req, actor=actor, client_ip=client_ip)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/rules/batch", response_model=List[AccessRuleResponse], status_code=status.HTTP_201_CREATED, summary="Create multiple access rules in a single batch")
+def create_rules_batch(req: AccessRuleBatchCreateRequest, request: Request, db: Session = Depends(get_db)):
+    user = get_optional_current_user(request, db)
+    if user and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator privileges required.")
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    actor = user.username if user else "admin"
+    try:
+        return AclService.create_batch_rules(db, req, actor=actor, client_ip=client_ip)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

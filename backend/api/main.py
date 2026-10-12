@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Subversion Nuvi API",
     description="Enterprise Management & Service API for Apache Subversion",
-    version="1.16.1",
+    version="1.16.3",
     lifespan=lifespan,
     docs_url=f"{config.API_URL_PREFIX}/docs",
     openapi_url=f"{config.API_URL_PREFIX}/openapi.json",
@@ -61,3 +61,8 @@ def health_check():
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.api.main:app", host=config.HOST, port=config.PORT, log_level=config.LOG_LEVEL.lower())
+

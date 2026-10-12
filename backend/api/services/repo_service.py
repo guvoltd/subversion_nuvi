@@ -43,6 +43,76 @@ def get_dir_size(path: Path) -> int:
 
 class RepositoryService:
     @staticmethod
+    def _resolve_repo_path(db: Session, r: Repository) -> Path:
+        """Resolve and auto-heal repository filesystem path if it has moved."""
+        path = Path(r.fs_path)
+        if path.exists():
+            return path
+
+        candidates = [
+            config.REPOSITORIES_ROOT / r.name,
+            config.DATA_DIR / "repositories" / r.name,
+            config.DATA_DIR / "repositorys" / r.name,
+        ]
+        for cand in candidates:
+            if cand.exists():
+                r.fs_path = str(cand)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                return cand
+        return path
+
+    @staticmethod
+    def _set_repo_permissions(repo_path: Path) -> None:
+        """Recursively ensure repository directory is owned by subversion:subversion with setgid 2775 and 664 files."""
+        import pwd
+        import grp
+        import stat
+
+        uid = -1
+        gid = -1
+        for u in [os.getenv("NUVI_USER", "subversion"), "subversion"]:
+            try:
+                uid = pwd.getpwnam(u).pw_uid
+                break
+            except KeyError:
+                pass
+        for g in [os.getenv("NUVI_GROUP", "subversion"), "subversion", "www-data"]:
+            try:
+                gid = grp.getgrnam(g).gr_gid
+                break
+            except KeyError:
+                pass
+
+        if not repo_path.exists():
+            return
+
+        for root, dirs, files in os.walk(repo_path):
+            if uid != -1 or gid != -1:
+                try:
+                    os.chown(root, uid, gid)
+                except Exception:
+                    pass
+            try:
+                os.chmod(root, stat.S_ISGID | stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)  # 2775
+            except Exception:
+                pass
+
+            for f in files:
+                f_path = os.path.join(root, f)
+                if uid != -1 or gid != -1:
+                    try:
+                        os.chown(f_path, uid, gid)
+                    except Exception:
+                        pass
+                try:
+                    os.chmod(f_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)  # 664
+                except Exception:
+                    pass
+
+    @staticmethod
     def list_repositories(db: Session, allowed_repo_ids: Optional[List[int]] = None) -> List[RepositoryResponse]:
         """List registered repositories with live on-disk status. Optionally filter by allowed_repo_ids."""
         query = db.query(Repository)
@@ -53,7 +123,7 @@ class RepositoryService:
         repos = query.order_by(Repository.name.asc()).all()
         results = []
         for r in repos:
-            repo_path = Path(r.fs_path)
+            repo_path = RepositoryService._resolve_repo_path(db, r)
             latest_author = ""
             latest_date = ""
             latest_log = ""
@@ -98,7 +168,7 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        repo_path = Path(r.fs_path)
+        repo_path = RepositoryService._resolve_repo_path(db, r)
         size_bytes = get_dir_size(repo_path) if repo_path.exists() else 0
         latest_author = ""
         latest_date = ""
@@ -200,7 +270,96 @@ class RepositoryService:
         db.commit()
         db.refresh(db_repo)
 
+        # Enforce group and file permissions for subversion/Apache collaboration
+        RepositoryService._set_repo_permissions(repo_dir)
+
+        # Recompile authz rules so new repository is recognized in authorization matrix
+        try:
+            from backend.api.services.acl_service import AclService
+            AclService.compile_authz_file(db)
+        except Exception:
+            pass
+
         return RepositoryService.get_repository(db, db_repo.id)
+
+    @staticmethod
+    def register_existing_repository(db: Session, repo_path: Path, actor: str = "cli") -> Optional[Repository]:
+        """Register or synchronize an existing Subversion repository found on disk."""
+        repo_path = Path(repo_path).resolve()
+        if not repo_path.exists() or not (repo_path / "format").exists():
+            return None
+
+        name = repo_path.name
+        existing = db.query(Repository).filter(Repository.name == name).first()
+        info = svn_engine.get_repository_info(str(repo_path))
+
+        if existing:
+            existing.fs_path = str(repo_path)
+            existing.uuid = info.get("uuid") or existing.uuid
+            existing.format_version = info.get("format_version") or existing.format_version
+            existing.latest_revision = info.get("latest_revision", existing.latest_revision)
+            existing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing)
+            db_repo = existing
+        else:
+            db_repo = Repository(
+                name=name,
+                description=f"Imported existing repository ({name})",
+                fs_path=str(repo_path),
+                uuid=info.get("uuid", ""),
+                fs_type=info.get("fs_type", "fsfs"),
+                format_version=info.get("format_version", 2),
+                latest_revision=info.get("latest_revision", 0),
+                is_locked=False,
+                rep_sharing_enabled=True,
+                compression="lz4",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            db.add(db_repo)
+            db.commit()
+            db.refresh(db_repo)
+
+        # Enforce file/folder permissions
+        RepositoryService._set_repo_permissions(repo_path)
+
+        # Recompile authz rules
+        try:
+            from backend.api.services.acl_service import AclService
+            AclService.compile_authz_file(db)
+        except Exception:
+            pass
+
+        return db_repo
+
+    @staticmethod
+    def scan_and_sync_repositories(db: Session, search_dir: Optional[Path] = None) -> List[Repository]:
+        """Scan a directory for Subversion repositories and ensure all are registered and synchronized."""
+        root = Path(search_dir) if search_dir else config.REPOSITORIES_ROOT
+        synced = []
+        if not root.exists() or not root.is_dir():
+            return synced
+
+        # Check if root itself is a repository
+        if (root / "format").exists() and (root / "db").exists():
+            rep = RepositoryService.register_existing_repository(db, root)
+            if rep:
+                synced.append(rep)
+            return synced
+
+        # Scan subdirectories
+        try:
+            for entry in os.scandir(root):
+                if entry.is_dir(follow_symlinks=True):
+                    ep = Path(entry.path)
+                    if (ep / "format").exists() and (ep / "db").exists():
+                        rep = RepositoryService.register_existing_repository(db, ep)
+                        if rep:
+                            synced.append(rep)
+        except Exception:
+            pass
+        return synced
 
     @staticmethod
     def delete_repository(db: Session, repo_id: int, delete_files: bool = True, actor: str = "SYSTEM", client_ip: str = "127.0.0.1") -> None:
@@ -300,7 +459,8 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        locks_raw = svn_engine.get_active_locks(r.fs_path)
+        repo_path = RepositoryService._resolve_repo_path(db, r)
+        locks_raw = svn_engine.get_active_locks(str(repo_path)) if repo_path.exists() else []
         return [LockResponse(**l) for l in locks_raw]
 
     @staticmethod
@@ -310,7 +470,8 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        svn_engine.break_lock(r.fs_path, locked_path)
+        repo_path = RepositoryService._resolve_repo_path(db, r)
+        svn_engine.break_lock(str(repo_path), locked_path)
 
         audit = AuditLog(
             actor=actor,
@@ -331,7 +492,8 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        txns_raw = svn_engine.get_uncommitted_transactions(r.fs_path)
+        repo_path = RepositoryService._resolve_repo_path(db, r)
+        txns_raw = svn_engine.get_uncommitted_transactions(str(repo_path)) if repo_path.exists() else []
         return [TransactionResponse(**t) for t in txns_raw]
 
     @staticmethod
@@ -341,7 +503,8 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        svn_engine.abort_transaction(r.fs_path, txn_name)
+        repo_path = RepositoryService._resolve_repo_path(db, r)
+        svn_engine.abort_transaction(str(repo_path), txn_name)
 
         audit = AuditLog(
             actor=actor,
@@ -362,13 +525,18 @@ class RepositoryService:
         if not r:
             raise ValueError(f"Repository with ID {repo_id} not found")
 
-        repo_path = Path(r.fs_path)
-        total_size = get_dir_size(repo_path)
-        db_size = get_dir_size(repo_path / "db") if (repo_path / "db").exists() else 0
+        repo_path = RepositoryService._resolve_repo_path(db, r)
+        total_size = get_dir_size(repo_path) if repo_path.exists() else 0
+        db_size = get_dir_size(repo_path / "db") if (repo_path.exists() and (repo_path / "db").exists()) else 0
 
-        locks_count = len(svn_engine.get_active_locks(r.fs_path))
-        txns_count = len(svn_engine.get_uncommitted_transactions(r.fs_path))
-        info = svn_engine.get_repository_info(r.fs_path)
+        locks_count = len(svn_engine.get_active_locks(str(repo_path))) if repo_path.exists() else 0
+        txns_count = len(svn_engine.get_uncommitted_transactions(str(repo_path))) if repo_path.exists() else 0
+        info = svn_engine.get_repository_info(str(repo_path)) if repo_path.exists() else {
+            "uuid": r.uuid or "",
+            "fs_type": r.fs_type,
+            "format_version": r.format_version,
+            "latest_revision": r.latest_revision,
+        }
 
         return RepositoryStatsResponse(
             repository_id=r.id,
@@ -395,14 +563,14 @@ class RepositoryService:
         total_txns = 0
 
         for r in repos:
-            p = Path(r.fs_path)
+            p = RepositoryService._resolve_repo_path(db, r)
             if p.exists():
                 total_storage += get_dir_size(p)
                 try:
-                    info = svn_engine.get_repository_info(r.fs_path)
+                    info = svn_engine.get_repository_info(str(p))
                     total_revisions += info["latest_revision"]
-                    total_locks += len(svn_engine.get_active_locks(r.fs_path))
-                    total_txns += len(svn_engine.get_uncommitted_transactions(r.fs_path))
+                    total_locks += len(svn_engine.get_active_locks(str(p)))
+                    total_txns += len(svn_engine.get_uncommitted_transactions(str(p)))
                 except Exception:
                     pass
 
@@ -438,7 +606,7 @@ class RepositoryService:
 
         return ServerStatusResponse(
             server_name=config.SERVER_NAME,
-            version="1.16.1 (Subversion 1.16.1)",
+            version="1.16.3 (Subversion 1.16.3)",
             uptime_seconds=time.time() - START_TIME,
             uptime_formatted=uptime_str,
             repositories_count=len(repos),

@@ -102,7 +102,10 @@ class SecurityService:
 
         try:
             from backend.api.services.acl_service import AclService
-            AclService.compile_htpasswd(db)
+            if user.is_admin:
+                AclService.compile_authz_file(db)
+            else:
+                AclService.compile_htpasswd(db)
         except Exception:
             pass
 
@@ -149,6 +152,13 @@ class SecurityService:
             target_id=user.username
         ))
         db.commit()
+
+        if req.is_admin is not None:
+            try:
+                from backend.api.services.acl_service import AclService
+                AclService.compile_authz_file(db)
+            except Exception:
+                pass
 
         return SecurityService._user_to_dto(user)
 

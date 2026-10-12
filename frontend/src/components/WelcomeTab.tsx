@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Key,
   Terminal,
@@ -15,8 +15,9 @@ import {
   Search,
   Lock
 } from 'lucide-react';
-import { AuthUser, Repository } from '../types';
+import { AuthUser, Repository, ServerConfig } from '../types';
 import { api } from '../services/api';
+import { buildCheckoutUrl } from '../utils/checkoutUrl';
 import { NUVI_LOGO_SRC } from '../assets/logo';
 
 interface WelcomeTabProps {
@@ -43,6 +44,11 @@ export const WelcomeTab: React.FC<WelcomeTabProps> = ({
   // Copy state
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [repoSearch, setRepoSearch] = useState('');
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+
+  useEffect(() => {
+    api.getServerConfig().then(setServerConfig).catch(() => {});
+  }, []);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -249,7 +255,7 @@ export const WelcomeTab: React.FC<WelcomeTabProps> = ({
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1rem' }}>
               {filteredRepos.map((repo) => {
-                const checkoutUrl = `${window.location.origin}/svn/${repo.name}`;
+                const checkoutUrl = buildCheckoutUrl(repo.name, serverConfig);
                 const checkoutCmd = `svn checkout ${checkoutUrl}`;
                 const isCopied = copiedId === `repo-${repo.id}`;
 

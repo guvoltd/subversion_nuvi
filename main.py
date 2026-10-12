@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Subversion Nuvi API",
     description="Enterprise Management & Service API for Apache Subversion",
-    version="1.16.1",
+    version="1.16.3",
     lifespan=lifespan,
     docs_url=f"{config.API_URL_PREFIX}/docs",
     openapi_url=f"{config.API_URL_PREFIX}/openapi.json",

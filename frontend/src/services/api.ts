@@ -132,8 +132,32 @@ export const api = {
     import_acls?: boolean;
     import_users?: boolean;
     import_hooks?: boolean;
+    default_password?: string;
   }): Promise<ArchiveImportResponse> {
     const res = await fetch(`${API_BASE}/repositories/import-archive-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse<ArchiveImportResponse>(res);
+  },
+
+  async importDumpFile(formData: FormData): Promise<ArchiveImportResponse> {
+    const res = await fetch(`${API_BASE}/repositories/import-dump-file`, {
+      method: 'POST',
+      body: formData
+    });
+    return handleResponse<ArchiveImportResponse>(res);
+  },
+
+  async importDumpPath(payload: {
+    dump_path: string;
+    repo_name?: string;
+    description?: string;
+    import_users?: boolean;
+    default_password?: string;
+  }): Promise<ArchiveImportResponse> {
+    const res = await fetch(`${API_BASE}/repositories/import-dump-path`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -259,6 +283,15 @@ export const api = {
       body: JSON.stringify(payload)
     });
     return handleResponse<any>(res);
+  },
+
+  async createRulesBatch(rules: any[]): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/acl/rules/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules })
+    });
+    return handleResponse<any[]>(res);
   },
 
   async deleteRule(id: number): Promise<void> {

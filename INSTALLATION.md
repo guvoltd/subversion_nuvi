@@ -26,8 +26,8 @@ The repository includes pre-built artifacts and automated setup scripts:
 
 | Asset / Script | Location | Purpose |
 | :--- | :--- | :--- |
-| **Pre-built Debian Package** | `dist/subversion-nuvi_1.16.1_amd64.deb` | Ready-to-install `.deb` package for Ubuntu and Debian |
-| **Standalone Tarball** | `dist/subversion-nuvi-1.16.1-linux-x86_64.tar.gz` | Portable distribution package |
+| **Pre-built Debian Package** | `dist/subversion-nuvi_1.16.3_amd64.deb` | Ready-to-install `.deb` package for Ubuntu and Debian |
+| **Standalone Tarball** | `dist/subversion-nuvi-1.16.3-linux-x86_64.tar.gz` | Portable distribution package |
 | **Root Docker Compose** | `docker-compose.yml` | Production Docker Compose service configuration |
 | **Production Dockerfile** | `packaging/docker/Dockerfile` | 3-stage multi-stage image definition |
 | **Turnkey Host Installer** | `packaging/install.sh` | Automated host installer script for Ubuntu / Debian |
@@ -156,10 +156,10 @@ sudo apt-get install -y \
 
 ```bash
 # Install the generated .deb package directly via apt (resolves any missing runtime dependencies)
-sudo apt-get install -y ./dist/subversion-nuvi_1.16.1_amd64.deb
+sudo apt-get install -y ./dist/subversion-nuvi_1.16.3_amd64.deb
 
 # OR install using dpkg:
-sudo dpkg -i dist/subversion-nuvi_1.16.1_amd64.deb
+sudo dpkg -i dist/subversion-nuvi_1.16.3_amd64.deb
 sudo apt-get install -f -y
 ```
 
@@ -225,7 +225,82 @@ If you prefer to run Subversion Nuvi directly under your current user account:
 ```bash
 sudo systemctl status nuvi-api.service
 sudo systemctl status nuvi-worker.service
+nuvictl status
 ```
+
+---
+
+### 5.5 Complete Uninstallation & Clean Reinstallation
+
+To completely remove Subversion Nuvi, purge all services and data, and perform a fresh reinstall from `.deb`:
+
+#### Step 1: Complete Removal / Purge
+```bash
+# 1. Stop and disable active services
+sudo systemctl stop nuvi-api.service nuvi-worker.service 2>/dev/null || true
+sudo systemctl disable nuvi-api.service nuvi-worker.service 2>/dev/null || true
+
+# 2. Purge the Debian package (removes systemd units and package files)
+sudo apt-get purge -y subversion-nuvi || sudo dpkg -P subversion-nuvi
+
+# 3. Clean up runtime directories, database, logs, and venv
+sudo rm -rf /opt/nuvi
+sudo rm -rf /var/log/nuvi
+sudo rm -rf /etc/nuvi
+sudo rm -f /usr/local/bin/nuvictl
+sudo rm -f /etc/systemd/system/nuvi-api.service /etc/systemd/system/nuvi-worker.service
+
+# 4. Reload systemd daemon
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+```
+
+#### Step 2: Clean Reinstallation
+```bash
+# Install the fresh .deb package via apt (resolves any dependencies automatically)
+sudo apt-get install -y ./dist/subversion-nuvi_1.16.3_amd64.deb
+
+# OR install using dpkg:
+# sudo dpkg -i dist/subversion-nuvi_1.16.3_amd64.deb
+# sudo apt-get install -f -y
+
+# Activate subversion group membership in current shell:
+newgrp subversion
+
+# Verify
+nuvictl status
+```
+
+---
+
+### 5.6 Filesystem Ownership, Groups, and Permissions Matrix
+
+The `.deb` package installs with a defense-in-depth permission model: application source and binaries are immutable to the service user (`root:root 0755/0644`), while runtime state directories use **setgid (`2775`)** to ensure seamless group collaboration between the `subversion` service daemon, Apache (`www-data`), and administrator accounts.
+
+| Filesystem Path | Owner | Group | Permissions (Mode) | Purpose & Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **`/opt/nuvi`** | `root` | `root` | `0755` (`drwxr-xr-x`) | Base installation root; immutable to service accounts |
+| **`/opt/nuvi/backend`** | `root` | `root` | `0755` (dirs) / `0644` (files) | Python API backend; protected against unauthorized tampering |
+| **`/opt/nuvi/backend/core/build/libnuvi_svn_core.so`** | `root` | `root` | `0755` (`-rwxr-xr-x`) | Native C++ Subversion bridge shared library |
+| **`/opt/nuvi/frontend`** | `root` | `root` | `0755` (dirs) / `0644` (files) | Web console compiled static assets |
+| **`/opt/nuvi/venv`** | `root` | `root` | `0755` (execs) / `0644` (libs) | Isolated Python runtime; executable by `subversion` |
+| **`/opt/nuvi/bin/nuvictl`** | `root` | `root` | `0755` (`-rwxr-xr-x`) | Headless administration CLI script |
+| **`/usr/bin/nuvictl`** | `root` | `root` | `lrwxrwxrwx` -> `/opt/nuvi/bin/nuvictl` | Global standard Debian system binary symlink |
+| **`/usr/local/bin/nuvictl`** | `root` | `root` | `lrwxrwxrwx` -> `/opt/nuvi/bin/nuvictl` | Backward-compatibility symlink |
+| **`/opt/nuvi/data`** | `subversion` | `subversion` | `2775` (`drwxrwsr-x`) | Runtime data root; **setgid** enforces group inheritance |
+| **`/opt/nuvi/data/repositories`** | `subversion` | `subversion` | `2775` (`drwxrwsr-x`) | FSFS repositories; shared with Apache `www-data` via group |
+| **`/opt/nuvi/data/db`** | `subversion` | `subversion` | `2770` (`drwxrws---`) | SQLite database directory; restricted to service group |
+| **`/opt/nuvi/data/db/*.sqlite3*`** | `subversion` | `subversion` | `0660` (`-rw-rw----`) | Metadata database and WAL journals; service group read/write |
+| **`/opt/nuvi/data/backups`** | `subversion` | `subversion` | `2770` (`drwxrws---`) | Hot backup archives; restricted to service group |
+| **`/opt/nuvi/data/certs`** | `subversion` | `subversion` | `2770` (`drwxrws---`) | TLS private keys and X.509 certs; restricted to service group |
+| **`/opt/nuvi/data/search_index`** | `subversion` | `subversion` | `2775` (`drwxrwsr-x`) | FTS5 full-text search indexes |
+| **`/opt/nuvi/data/authz`** | `subversion` | `subversion` | `0664` (`-rw-rw-r--`) | Compiled ACL file; readable by Apache `mod_authz_svn` |
+| **`/opt/nuvi/data/htpasswd`** | `subversion` | `subversion` | `0664` (`-rw-rw-r--`) | Compiled basic auth credentials; readable by Apache |
+| **`/var/log/nuvi`** | `subversion` | `subversion` | `2775` (`drwxrwsr-x`) | Application and Subversion access/error logs |
+| **`/etc/nuvi`** | `root` | `subversion` | `0750` (`drwxr-x---`) | Configuration directory; hidden from unprivileged accounts |
+| **`/etc/nuvi/nuvi.env`** | `root` | `subversion` | `0640` (`-rw-r-----`) | Environment secrets (JWT key, LDAP); read-only to service |
+| **`/etc/nuvi/nuvi.env.example`** | `root` | `root` | `0644` (`-rw-r--r--`) | Public master configuration reference template |
+| **`/etc/systemd/system/nuvi-*.service`** | `root` | `root` | `0644` (`-rw-r--r--`) | Systemd unit files; strictly non-executable / non-writable |
 
 ---
 
@@ -250,6 +325,18 @@ sudo ./packaging/install.sh --user=$USER
 # OR set the NUVI_USER environment variable:
 NUVI_USER=$USER sudo -E ./packaging/install.sh
 ```
+
+#### Option C: Follow Custom `.env` Configuration File
+```bash
+# Simply place a configured .env in the current directory:
+cp .env.example .env
+nano .env
+sudo ./install.sh
+
+# OR pass an explicit configuration file:
+sudo ./install.sh --env-file=/custom/path/nuvi.env
+```
+The installer automatically discovers `.env`, extracts custom repository storage paths (`NUVI_REPOSITORIES_ROOT`), service ports (`NUVI_PORT`), log directories (`NUVI_LOGS_DIR`), and service user settings (`NUVI_USER`), copies the active `.env` to `/etc/nuvi/nuvi.env` and `/opt/nuvi/.env`, and ensures directory creation and systemd sandboxing rules are updated.
 
 ### 6.2 What the Script Automates
 1. Installs all required compilers and header libraries (`build-essential`, `cmake`, `libsvn-dev`, `libapr1-dev`, `libaprutil1-dev`, `apache2`, `libapache2-mod-svn`, `python3-venv`).
@@ -279,7 +366,7 @@ sudo dnf install -y subversion apr apr-util python3 python3-pip httpd mod_dav_sv
 ### 7.2 Extract Archive
 
 ```bash
-sudo tar -xzf dist/subversion-nuvi-1.16.1-linux-x86_64.tar.gz -C /
+sudo tar -xzf dist/subversion-nuvi-1.16.3-linux-x86_64.tar.gz -C /
 ```
 
 This extracts files into `/opt/nuvi`, `/etc/systemd/system/`, and `/usr/local/bin/`.

@@ -2,12 +2,15 @@
 Description=Subversion Nuvi - Background Worker Daemon (Backups, Verify, Indexer)
 Documentation=https://github.com/nuvi/subversion-nuvi
 After=network.target local-fs.target nuvi-api.service
-Requires=nuvi-api.service
+# Decouple crash dependency: allow the worker to stay running even if API restarts/crashes
+Wants=nuvi-api.service
 
 [Service]
 Type=simple
 User=subversion
 Group=subversion
+UMask=0002
+
 WorkingDirectory=/opt/nuvi
 EnvironmentFile=-/etc/nuvi/nuvi.env
 EnvironmentFile=-/opt/nuvi/.env
@@ -18,12 +21,24 @@ ExecStart=/opt/nuvi/venv/bin/python3 -m backend.api.worker
 Restart=always
 RestartSec=10s
 
-# Security hardening
+# Security hardening & sandboxing
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/nuvi/data /var/log/nuvi
+# Set to false to allow custom data/repository storage roots located under /home
+ProtectHome=false
 PrivateTmp=true
-ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictRealtime=true
+
+# Managed directories (systemd automatically creates them with proper ownership)
+LogsDirectory=nuvi
+LogsDirectoryMode=0775
+StateDirectory=nuvi
+StateDirectoryMode=0775
+
+# Whitelist write access outside of managed directories
+ReadWritePaths=-/opt/nuvi/data -/var/nuvi -/home
 
 # Resource limits
 LimitNOFILE=65536

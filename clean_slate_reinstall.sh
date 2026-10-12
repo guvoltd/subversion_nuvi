@@ -1,0 +1,1 @@
+scripts/clean_slate_reinstall.sh

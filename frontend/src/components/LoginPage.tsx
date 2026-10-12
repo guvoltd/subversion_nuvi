@@ -9,8 +9,8 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,7 +111,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         <form onSubmit={handleSubmit}>
           <div className="form-group" style={{ marginBottom: '1.25rem' }}>
             <label className="form-label" style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.45rem', color: 'var(--text-muted)' }}>
-              Username
+              Username or Email
             </label>
             <div style={{ position: 'relative' }}>
               <User size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
@@ -119,7 +119,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 type="text"
                 className="form-input"
                 style={{ width: '100%', paddingLeft: '2.5rem' }}
-                placeholder="e.g. admin"
+                placeholder="Enter username or email"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
@@ -138,7 +138,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 type="password"
                 className="form-input"
                 style={{ width: '100%', paddingLeft: '2.5rem' }}
-                placeholder="Password"
+                placeholder="Enter password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
@@ -181,7 +181,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <span>Secured with Argon2id & Active Brute-Force Shield</span>
           </div>
           <div style={{ color: 'var(--text-muted)' }}>
-            Default server credentials: <code className="mono">admin</code> / <code className="mono">admin</code>
+            Sign in using your Subversion username / email and password
           </div>
         </div>
       </div>

@@ -4,6 +4,60 @@
 # To view an issue listed as (issue #XXXX), visit:
 #   https://subversion.apache.org/issue-XXXX
 
+Version 1.16.3
+(12 Oct 2026, based on Version 1.16.2)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.3
+
+ User-visible changes:
+  - Access Control & Web Console Enhancements:
+    * Multi-User Checkbox Selection for Path-Based Access Rules:
+      Reimplemented user selection in the "Add Path-Based Access Rule" modal.
+      Administrators can now select multiple users simultaneously using an
+      interactive checkbox list instead of being restricted to a single user dropdown.
+    * Interactive User Filtering & Batch Actions:
+      Equipped the user checkbox picker with a real-time search filter (matching
+      username, full name, and email), "Select All" / "Clear" one-click action
+      buttons, and live selection counters ("X of Y users selected").
+    * User Cards & Selected Chips Bar:
+      Rendered each user with an avatar crest, bold username, full name, and email,
+      supporting row-click selection toggling and displaying an active selected users
+      chips bar with quick-remove buttons.
+    * Atomic Transactional Batch ACL Endpoint:
+      Introduced 'POST /api/v1/acl/rules/batch' and 'AclService.create_batch_rules',
+      enabling atomic, high-performance creation of multiple access rules across
+      multiple principals and paths in a single database transaction with a single
+      authz compilation pass.
+
+Version 1.16.2
+(12 Oct 2026, based on Version 1.16.1)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.2
+
+ User-visible changes:
+  - Major new features & security improvements:
+    * Multi-Mode Path ACL Resolution ("+ Grant Path" / "- Deny Path"):
+      Introduced distinct Grant and Deny path permission workflows in the Web
+      Console and backend ACL engine. Resolves permissions dynamically across
+      3 distinct modes:
+        - Mode 1 (Grant-Only): When only granted paths are defined, unmentioned
+          sibling branches are automatically denied, enabling secure sparse checkouts.
+        - Mode 2 (Deny-Only): When only denied paths are defined, repository root
+          grants default read-write access while explicitly denying listed paths.
+        - Mode 3 (Hybrid): When both granted and denied paths are configured,
+          explicit grants remain active, denied paths are blocked, and unmentioned
+          paths are denied.
+    * Interactive Group Membership & User Directory Filtering:
+      Group management modal now surfaces an interactive user directory picker
+      listing unassigned users, one-click add buttons, quick-add selection,
+      and real-time live search filtering for available users and current members.
+    * Repository Ownership & Rights Management Tooling:
+      Added standalone script (fix_repo_permissions.sh) and CLI commands
+      ('nuvictl repo sync' and 'nuvictl repo fix-permissions') supporting zero or
+      single-repo arguments to auto-repair directory permissions, sticky bits,
+      and subversion/www-data ownership for copied repositories.
+    * Incremental Versioning Policy:
+      Enforced strict +0.0.1 semantic version bumping across backend API, frontend,
+      CLI, packaging manifests, and distribution archives on each source change.
+
 Version 1.16.1
 (06 Oct 2026, based on Version 1.16.0)
 https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.1
@@ -16,6 +70,12 @@ https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.1
     * Hierarchical Configuration Flow: automatic discovery and runtime loading
       of settings from environment variables, explicit NUVI_ENV_FILE, ./.env,
       /etc/nuvi/nuvi.env, and /opt/nuvi/.env.
+    * Standalone SVN Dump Import Option: added native support for importing raw
+      and compressed Subversion dump files (*.dump, *.svndump, *.dump.gz, *.dump.bz2)
+      directly into Nuvi as a first-class alternative to ZIP archive packages.
+      Includes automatic commit author discovery to auto-provision user accounts,
+      dual-option modal in Web Console UI, dedicated REST API endpoints
+      (/import-dump-file and /import-dump-path), and CLI command 'nuvictl repo import-dump'.
     * Flexible Service User Rights: support running Subversion Nuvi using the
       current Linux login user ($USER) as an alternative to dedicated system
       users (subversion/nuvi), enabling direct read/write file access without sudo.
@@ -43,18 +103,37 @@ https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.1
  Developer-visible and packaging changes:
   - Packaging and deployment:
     * Turnkey documentation: created master INSTALLATION.md detailing
-      prerequisites, system matrix, and deployment guides for Docker, Debian
-      packages, turnkey scripts, and tarballs.
+      prerequisites, system matrix, deployment guides, and complete filesystem
+      ownership and permissions matrix.
+    * Strict Debian package permissions sanitization: resolved security flaw
+      where host/NTFS 0777 permissions leaked into .deb packages. Package tree
+      is now sanitized with strict standard modes (0755 dirs, 0644 files/units,
+      0755 binaries).
+    * Dual binary symlinks: installed /usr/bin/nuvictl (Debian packaging standard)
+      alongside /usr/local/bin/nuvictl for maximum CLI compatibility.
+    * Build artifact cleanup: pruned compiler test binaries (a.out), cmake caches,
+      and stale __pycache__ Python 3.12 bytecode from release archives.
+    * Setgid (2775) directory permissions: applied setgid bit to /opt/nuvi/data,
+      repositories, and logs to guarantee automatic group inheritance for
+      Apache (www-data) and subversion service workers.
+    * Systemd UMask hardening: added UMask=0002 to nuvi-api.service and
+      nuvi-worker.service to prevent 0644 group-lockouts on runtime files.
+    * Python runtime dependencies: created root requirements.txt containing
+      canonical dependencies (fastapi, uvicorn[standard], pydantic, sqlalchemy,
+      argon2-cffi, cryptography, python-multipart, psutil, python-dotenv).
+    * Fixed Debian 13 FastAPI crash: resolved "Form data requires python-multipart"
+      startup error by provisioning python-multipart and cryptography in postinst,
+      control dependencies, and host installer (install.sh).
     * Automated Host Installer (install.sh): added --user=$USER and NUVI_USER
       options to configure permissions, Apache www-data group access, and
       systemd service units for any specified user.
-    * Debian package enhancements (build_package.sh): packages now bundle
-      /etc/nuvi/nuvi.env.example and auto-initialize /etc/nuvi/nuvi.env with
-      secure permissions (chmod 640) on postinst.
-    * Docker Compose updates: added env_file (.env) support and environment
-      port mappings (${NUVI_PORT:-8080}, ${NUVI_SVN_PORT:-8081}).
-    * Systemd units: updated nuvi-api.service and nuvi-worker.service to load
-      EnvironmentFile=-/etc/nuvi/nuvi.env and EnvironmentFile=-/opt/nuvi/.env.
+    * Database initialization resilience: postinst executes schema initialization
+      directly under the subversion service user, eliminating root-owned WAL
+      journal file lockouts.
+    * Resilient 'nuvictl status': checks live REST API first and falls back
+      gracefully without crashing if database metadata is not yet initialized.
+    * Clean package purge (postrm): added debian/postrm script to remove
+      /opt/nuvi, /var/log/nuvi, /etc/nuvi, and nuvictl symlinks on apt purge.
 
 Version 1.16.0
 (?? ??? 20XX, from /branches/1.16.x)

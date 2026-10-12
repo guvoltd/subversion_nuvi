@@ -1,6 +1,7 @@
 export interface Repository {
   id: number;
   name: string;
+  description?: string | null;
   uuid: string;
   fs_type: string;
   fs_format: number;
@@ -24,6 +25,7 @@ export interface RepositoryStats {
 
 export interface ServerStatus {
   server_name: string;
+  version?: string;
   uptime_seconds: number;
   uptime_formatted: string;
   repositories_count: number;
@@ -46,6 +48,8 @@ export interface ServerConfig {
   ban_duration_seconds: number;
   password_min_length: number;
   trusted_subnets: string[];
+  port?: number;
+  svn_port?: number;
 }
 
 export interface ActiveLock {
