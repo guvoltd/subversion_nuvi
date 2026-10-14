@@ -254,10 +254,46 @@ async def upload_file(
             author=author,
             log_message=commit_message
         )
+        try:
+            from backend.api.services.notification_service import NotificationService
+            NotificationService.sync_repository_notifications(db, repo_id)
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "message": f"File '{file_path}' committed successfully.",
             "committed_revision": new_rev
+        }
+    except SubversionNativeError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.get("/{repo_id}/logs", summary="Get commit history logs for a repository or subpath")
+def get_commit_logs(
+    repo_id: int,
+    request: Request,
+    path: str = Query("/", description="Subdirectory or file path, e.g. / or /trunk"),
+    limit: int = Query(50, ge=1, le=1000, description="Maximum number of log entries to retrieve"),
+    rev: int = Query(-1, description="Base revision (-1 for HEAD)"),
+    db: Session = Depends(get_db)
+):
+    user = get_optional_current_user(request, db)
+    if user and not user.is_admin:
+        if not AclService.user_has_repo_access(db, user, repo_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to repository forbidden.")
+        perm = AclService.evaluate_permission(db, user.username, repo_id, path)
+        if not perm.can_read:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Access to path '{path}' forbidden.")
+
+    repo = RepositoryService.get_repository(db, repo_id)
+    try:
+        logs = svn_engine.get_commit_logs(repo.fs_path, subpath=path, limit=limit, revision=rev)
+        return {
+            "repository_id": repo.id,
+            "repository_name": repo.name,
+            "path": path,
+            "total": len(logs),
+            "logs": logs
         }
     except SubversionNativeError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

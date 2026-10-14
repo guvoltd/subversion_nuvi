@@ -113,6 +113,29 @@ def test_repository_browser_lifecycle():
         assert lines[0]["line_number"] == 1
         assert lines[0]["author"] != ""
 
+        # 11. Get Commit History Logs for repository root /
+        logs_res = client.get(f"/api/v1/browser/{repo_id}/logs?path=/")
+        assert logs_res.status_code == 200
+        logs_data = logs_res.json()
+        assert logs_data["total"] >= 3
+        revisions = [entry["revision"] for entry in logs_data["logs"]]
+        assert 3 in revisions
+        assert 2 in revisions
+        assert 1 in revisions
+        authors = [entry["author"] for entry in logs_data["logs"]]
+        assert "developer-bob" in authors
+        assert "developer-alice" in authors
+        assert any(entry["message"] == "Update README with revision 3 details" for entry in logs_data["logs"])
+
+        # 12. Get Commit History Logs for specific file /trunk/README.md
+        file_logs_res = client.get(f"/api/v1/browser/{repo_id}/logs?path=/trunk/README.md")
+        assert file_logs_res.status_code == 200
+        file_logs_data = file_logs_res.json()
+        assert file_logs_data["total"] == 2
+        file_revs = [entry["revision"] for entry in file_logs_data["logs"]]
+        assert file_revs == [3, 2]
+        assert all(any("README.md" in cp["path"] for cp in entry["changed_paths"]) for entry in file_logs_data["logs"])
+
     finally:
         # Clean up test repository
         client.delete(f"/api/v1/repositories/{repo_id}?delete_files=true")

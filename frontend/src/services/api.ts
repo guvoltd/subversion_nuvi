@@ -11,7 +11,10 @@ import {
   ArchiveImportResponse,
   PersonalAccessToken,
   PATCreatedResponse,
-  RepositorySupervisor
+  RepositorySupervisor,
+  AdminNotification,
+  NotificationListResponse,
+  UnreadCountResponse
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -113,9 +116,9 @@ export const api = {
     return handleResponse<{ status: string; message: string }>(res);
   },
 
-  async packRepository(id: number): Promise<{ status: string; message: string }> {
-    const res = await fetch(`${API_BASE}/repositories/${id}/pack`, { method: 'POST' });
-    return handleResponse<{ status: string; message: string }>(res);
+  async packRepository(id: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/maintenance/pack/${id}`, { method: 'POST' });
+    return handleResponse<any>(res);
   },
 
   async importArchive(formData: FormData): Promise<ArchiveImportResponse> {
@@ -349,6 +352,11 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  async getCommitLogs(repoId: number, path: string = '/', limit: number = 50, rev: number = -1): Promise<any> {
+    const res = await fetch(`${API_BASE}/browser/${repoId}/logs?path=${encodeURIComponent(path)}&limit=${limit}&rev=${rev}`);
+    return handleResponse<any>(res);
+  },
+
   async uploadFile(repoId: number, filePath: string, file: File, author: string, message: string): Promise<any> {
     const formData = new FormData();
     formData.append('file_path', filePath);
@@ -440,10 +448,67 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  // Scheduled Backup Jobs (Multi-Task Queue)
+  async listBackupSchedules(repoId?: number): Promise<any[]> {
+    const url = repoId !== undefined ? `${API_BASE}/operations/backup/schedules?repo_id=${repoId}` : `${API_BASE}/operations/backup/schedules`;
+    const res = await fetch(url);
+    return handleResponse<any[]>(res);
+  },
+
+  async createBackupSchedule(payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/schedules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse<any>(res);
+  },
+
+  async updateBackupSchedule(jobId: number, payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/schedules/${jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return handleResponse<any>(res);
+  },
+
+  async deleteBackupSchedule(jobId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/schedules/${jobId}`, {
+      method: 'DELETE'
+    });
+    return handleResponse<any>(res);
+  },
+
+  async runBackupScheduleNow(jobId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/schedules/${jobId}/run`, {
+      method: 'POST'
+    });
+    return handleResponse<any>(res);
+  },
+
+  async toggleBackupSchedule(jobId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/schedules/${jobId}/toggle`, {
+      method: 'POST'
+    });
+    return handleResponse<any>(res);
+  },
+
   async listBackupArchives(repoId?: number): Promise<any[]> {
     const url = repoId ? `${API_BASE}/operations/backup/archives?repo_id=${repoId}` : `${API_BASE}/operations/backup/archives`;
     const res = await fetch(url);
     return handleResponse<any[]>(res);
+  },
+
+  getBackupDownloadUrl(archiveId: number): string {
+    return `${API_BASE}/operations/backup/archives/${archiveId}/download`;
+  },
+
+  async deleteBackupArchive(archiveId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/backup/archives/${archiveId}`, {
+      method: 'DELETE'
+    });
+    return handleResponse<any>(res);
   },
 
   async verifyBackup(archiveId: number, passphrase?: string): Promise<any> {
@@ -461,6 +526,28 @@ export const api = {
       body: JSON.stringify(payload)
     });
     return handleResponse<any>(res);
+  },
+
+  // Repository Maintenance & Optimization Tools
+  async cleanTransactions(repoId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/maintenance/clean-txns/${repoId}`, {
+      method: 'POST'
+    });
+    return handleResponse<any>(res);
+  },
+
+  async verifyRepositoryHealth(repoId: number, startRev?: number, endRev?: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/operations/maintenance/verify/${repoId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_revision: startRev, end_revision: endRev })
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getStorageStats(): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/operations/maintenance/storage-stats`);
+    return handleResponse<any[]>(res);
   },
 
   // Pre-Packaged Hook Engine (Phase 5)
@@ -709,6 +796,76 @@ export const api = {
       method: 'DELETE'
     });
     return handleResponse<void>(res);
+  },
+
+  // Admin Notifications
+  async getNotifications(params?: {
+    is_read?: boolean;
+    repository_id?: number;
+    limit?: number;
+    offset?: number;
+    auto_sync?: boolean;
+  }): Promise<NotificationListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.is_read !== undefined) searchParams.set('is_read', params.is_read.toString());
+    if (params?.repository_id !== undefined) searchParams.set('repository_id', params.repository_id.toString());
+    if (params?.limit !== undefined) searchParams.set('limit', params.limit.toString());
+    if (params?.offset !== undefined) searchParams.set('offset', params.offset.toString());
+    if (params?.auto_sync !== undefined) searchParams.set('auto_sync', params.auto_sync.toString());
+
+    const res = await fetch(`${API_BASE}/notifications?${searchParams.toString()}`);
+    return handleResponse<NotificationListResponse>(res);
+  },
+
+  async getUnreadNotificationsCount(repositoryId?: number, autoSync: boolean = true): Promise<UnreadCountResponse> {
+    const searchParams = new URLSearchParams();
+    if (repositoryId !== undefined) searchParams.set('repository_id', repositoryId.toString());
+    searchParams.set('auto_sync', autoSync.toString());
+
+    const res = await fetch(`${API_BASE}/notifications/unread-count?${searchParams.toString()}`);
+    return handleResponse<UnreadCountResponse>(res);
+  },
+
+  async syncNotifications(repositoryId?: number): Promise<any> {
+    const url = repositoryId ? `${API_BASE}/notifications/sync?repository_id=${repositoryId}` : `${API_BASE}/notifications/sync`;
+    const res = await fetch(url, { method: 'POST' });
+    return handleResponse<any>(res);
+  },
+
+  async markNotificationRead(notificationId: number): Promise<AdminNotification> {
+    const res = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+      method: 'POST'
+    });
+    return handleResponse<AdminNotification>(res);
+  },
+
+  async markNotificationUnread(notificationId: number): Promise<AdminNotification> {
+    const res = await fetch(`${API_BASE}/notifications/${notificationId}/unread`, {
+      method: 'POST'
+    });
+    return handleResponse<AdminNotification>(res);
+  },
+
+  async markAllNotificationsRead(repositoryId?: number): Promise<{ status: string; marked_count: number; message: string }> {
+    const res = await fetch(`${API_BASE}/notifications/mark-all-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repository_id: repositoryId ?? null, mark_all: true })
+    });
+    return handleResponse<any>(res);
+  },
+
+  async deleteNotification(notificationId: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/notifications/${notificationId}`, {
+      method: 'DELETE'
+    });
+    return handleResponse<any>(res);
+  },
+
+  async clearReadNotifications(repositoryId?: number): Promise<{ status: string; deleted_count: number; message: string }> {
+    const url = repositoryId ? `${API_BASE}/notifications/clear-read?repository_id=${repositoryId}` : `${API_BASE}/notifications/clear-read`;
+    const res = await fetch(url, { method: 'DELETE' });
+    return handleResponse<any>(res);
   }
 };
 

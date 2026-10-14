@@ -1,6 +1,6 @@
 # ==============================================================================
 # Subversion Nuvi - Compiled Authorization File (authz)
-# Generated automatically at: 2026-10-12T10:46:54.242685+00:00
+# Generated automatically at: 2026-10-14T07:39:58.809354+00:00
 # DO NOT EDIT MANUALLY - Changes will be overwritten by Subversion Nuvi
 # ==============================================================================
 
@@ -66,6 +66,20 @@ designers_f8209a = charlie_f8209a
 designers_bfe390 = charlie_bfe390
 designers_b9ec45 = charlie_b9ec45
 designers_67b220 = charlie_67b220
+designers_2b2ad0 = charlie_2b2ad0
+designers_83fa3e = charlie_83fa3e
+designers_5872fc = charlie_5872fc
+designers_6d4811 = charlie_6d4811
+designers_37ab14 = charlie_37ab14
+designers_663ab9 = charlie_663ab9
+designers_5d53ae = charlie_5d53ae
+designers_2d0e1e = charlie_2d0e1e
+designers_638a53 = charlie_638a53
+designers_6cb327 = charlie_6cb327
+designers_110121 = charlie_110121
+designers_865dfa = charlie_865dfa
+designers_5d8400 = charlie_5d8400
+designers_059065 = charlie_059065
 
 [/]
 admin = rw
@@ -79,10 +93,19 @@ admin = rw
 [BackupRepo_112d54:/]
 admin = rw
 
+[BackupRepo_1875e3:/]
+admin = rw
+
 [BackupRepo_1b7e2e:/]
 admin = rw
 
+[BackupRepo_22c715:/]
+admin = rw
+
 [BackupRepo_233c6d:/]
+admin = rw
+
+[BackupRepo_23958c:/]
 admin = rw
 
 [BackupRepo_2d455e:/]
@@ -133,13 +156,28 @@ admin = rw
 [BackupRepo_763d92:/]
 admin = rw
 
+[BackupRepo_7a4309:/]
+admin = rw
+
+[BackupRepo_800dac:/]
+admin = rw
+
+[BackupRepo_88eb78:/]
+admin = rw
+
 [BackupRepo_896426:/]
+admin = rw
+
+[BackupRepo_89ae56:/]
 admin = rw
 
 [BackupRepo_8c2d1c:/]
 admin = rw
 
 [BackupRepo_8ddfff:/]
+admin = rw
+
+[BackupRepo_9414b8:/]
 admin = rw
 
 [BackupRepo_9c28f9:/]
@@ -169,6 +207,9 @@ admin = rw
 [BackupRepo_c1bf2b:/]
 admin = rw
 
+[BackupRepo_cbec6f:/]
+admin = rw
+
 [BackupRepo_cdc074:/]
 admin = rw
 
@@ -176,6 +217,9 @@ admin = rw
 admin = rw
 
 [BackupRepo_d6d7b8:/]
+admin = rw
+
+[BackupRepo_d90569:/]
 admin = rw
 
 [BackupRepo_dc5542:/]
@@ -187,10 +231,19 @@ admin = rw
 [BackupRepo_e09069:/]
 admin = rw
 
+[BackupRepo_e4d026:/]
+admin = rw
+
 [BackupRepo_e5e2b0:/]
 admin = rw
 
+[BackupRepo_e76f93:/]
+admin = rw
+
 [BackupRepo_ed3df4:/]
+admin = rw
+
+[BackupRepo_ed76df:/]
 admin = rw
 
 [BackupRepo_f1447b:/]
@@ -200,6 +253,9 @@ admin = rw
 admin = rw
 
 [BackupRepo_f87be3:/]
+admin = rw
+
+[BackupRepo_fa0497:/]
 admin = rw
 
 [HookRepo_008fa4:/]
@@ -232,6 +288,9 @@ admin = rw
 [HookRepo_1089ae:/]
 admin = rw
 
+[HookRepo_2dafea:/]
+admin = rw
+
 [HookRepo_2daffe:/]
 admin = rw
 
@@ -242,6 +301,9 @@ admin = rw
 admin = rw
 
 [HookRepo_3180bc:/]
+admin = rw
+
+[HookRepo_346f36:/]
 admin = rw
 
 [HookRepo_392b7d:/]
@@ -268,7 +330,13 @@ admin = rw
 [HookRepo_5a0a35:/]
 admin = rw
 
+[HookRepo_5dec83:/]
+admin = rw
+
 [HookRepo_65f712:/]
+admin = rw
+
+[HookRepo_6aa952:/]
 admin = rw
 
 [HookRepo_6eb27a:/]
@@ -280,16 +348,25 @@ admin = rw
 [HookRepo_7709c3:/]
 admin = rw
 
+[HookRepo_7cc40b:/]
+admin = rw
+
 [HookRepo_96b163:/]
 admin = rw
 
 [HookRepo_980bb7:/]
 admin = rw
 
+[HookRepo_9882e0:/]
+admin = rw
+
 [HookRepo_a59fa3:/]
 admin = rw
 
 [HookRepo_a7bdab:/]
+admin = rw
+
+[HookRepo_aa78b5:/]
 admin = rw
 
 [HookRepo_ab6aab:/]
@@ -301,7 +378,13 @@ admin = rw
 [HookRepo_b2cda7:/]
 admin = rw
 
+[HookRepo_b86f22:/]
+admin = rw
+
 [HookRepo_c0900a:/]
+admin = rw
+
+[HookRepo_c534f3:/]
 admin = rw
 
 [HookRepo_c60222:/]
@@ -311,6 +394,18 @@ admin = rw
 admin = rw
 
 [HookRepo_d38fec:/]
+admin = rw
+
+[HookRepo_d93f2a:/]
+admin = rw
+
+[HookRepo_db141f:/]
+admin = rw
+
+[HookRepo_dde19b:/]
+admin = rw
+
+[HookRepo_e20cfb:/]
 admin = rw
 
 [HookRepo_e25239:/]
@@ -331,7 +426,31 @@ admin = rw
 [HookRepo_fb876d:/]
 admin = rw
 
+[HookRepo_fe287c:/]
+admin = rw
+
 [HookRepo_ffaa39:/]
+admin = rw
+
+[MaintRepo_2b2b15:/]
+admin = rw
+
+[MaintRepo_436d36:/]
+admin = rw
+
+[MaintRepo_8d57e7:/]
+admin = rw
+
+[MaintRepo_9a88f9:/]
+admin = rw
+
+[MaintRepo_a9a661:/]
+admin = rw
+
+[MaintRepo_dc9a3e:/]
+admin = rw
+
+[MaintRepo_e722ac:/]
 admin = rw
 
 [MasterRepo_017619:/]
@@ -367,10 +486,19 @@ admin = rw
 [MasterRepo_2683c1:/]
 admin = rw
 
+[MasterRepo_2fc8fc:/]
+admin = rw
+
 [MasterRepo_3738e1:/]
 admin = rw
 
+[MasterRepo_3aafcf:/]
+admin = rw
+
 [MasterRepo_3c9ffa:/]
+admin = rw
+
+[MasterRepo_3d978e:/]
 admin = rw
 
 [MasterRepo_458bc0:/]
@@ -389,6 +517,9 @@ admin = rw
 admin = rw
 
 [MasterRepo_544808:/]
+admin = rw
+
+[MasterRepo_586ba1:/]
 admin = rw
 
 [MasterRepo_58b4eb:/]
@@ -424,13 +555,31 @@ admin = rw
 [MasterRepo_756018:/]
 admin = rw
 
+[MasterRepo_7f867f:/]
+admin = rw
+
 [MasterRepo_809656:/]
+admin = rw
+
+[MasterRepo_8b7585:/]
+admin = rw
+
+[MasterRepo_8e7e72:/]
+admin = rw
+
+[MasterRepo_926009:/]
+admin = rw
+
+[MasterRepo_999a7a:/]
 admin = rw
 
 [MasterRepo_a0f76e:/]
 admin = rw
 
 [MasterRepo_a31039:/]
+admin = rw
+
+[MasterRepo_a4e24e:/]
 admin = rw
 
 [MasterRepo_a707f0:/]
@@ -463,7 +612,19 @@ admin = rw
 [MasterRepo_d3556f:/]
 admin = rw
 
+[MasterRepo_d36431:/]
+admin = rw
+
+[MasterRepo_e1de6f:/]
+admin = rw
+
 [MasterRepo_e6be22:/]
+admin = rw
+
+[MasterRepo_f05f56:/]
+admin = rw
+
+[MasterRepo_f1f8d2:/]
 admin = rw
 
 [Restored_00351b:/]
@@ -475,10 +636,19 @@ admin = rw
 [Restored_112d54:/]
 admin = rw
 
+[Restored_1875e3:/]
+admin = rw
+
 [Restored_1b7e2e:/]
 admin = rw
 
+[Restored_22c715:/]
+admin = rw
+
 [Restored_233c6d:/]
+admin = rw
+
+[Restored_23958c:/]
 admin = rw
 
 [Restored_2d455e:/]
@@ -529,13 +699,28 @@ admin = rw
 [Restored_763d92:/]
 admin = rw
 
+[Restored_7a4309:/]
+admin = rw
+
+[Restored_800dac:/]
+admin = rw
+
+[Restored_88eb78:/]
+admin = rw
+
 [Restored_896426:/]
+admin = rw
+
+[Restored_89ae56:/]
 admin = rw
 
 [Restored_8c2d1c:/]
 admin = rw
 
 [Restored_8ddfff:/]
+admin = rw
+
+[Restored_9414b8:/]
 admin = rw
 
 [Restored_9c28f9:/]
@@ -565,6 +750,9 @@ admin = rw
 [Restored_c1bf2b:/]
 admin = rw
 
+[Restored_cbec6f:/]
+admin = rw
+
 [Restored_cdc074:/]
 admin = rw
 
@@ -572,6 +760,9 @@ admin = rw
 admin = rw
 
 [Restored_d6d7b8:/]
+admin = rw
+
+[Restored_d90569:/]
 admin = rw
 
 [Restored_dc5542:/]
@@ -583,10 +774,19 @@ admin = rw
 [Restored_e09069:/]
 admin = rw
 
+[Restored_e4d026:/]
+admin = rw
+
 [Restored_e5e2b0:/]
 admin = rw
 
+[Restored_e76f93:/]
+admin = rw
+
 [Restored_ed3df4:/]
+admin = rw
+
+[Restored_ed76df:/]
 admin = rw
 
 [Restored_f1447b:/]
@@ -597,6 +797,34 @@ admin = rw
 
 [Restored_f87be3:/]
 admin = rw
+
+[Restored_fa0497:/]
+admin = rw
+
+[SchedRepo_2e7a27:/]
+admin = rw
+
+[SchedRepo_33cb4d:/]
+admin = rw
+
+[SchedRepo_83b797:/]
+admin = rw
+
+[SchedRepo_874a96:/]
+admin = rw
+
+[SchedRepo_8f4453:/]
+admin = rw
+
+[SchedRepo_ac0bc1:/]
+admin = rw
+
+[SchedRepo_fadbf4:/]
+admin = rw
+
+[SearchRepo_03d13f:/]
+admin = rw
+charlie_03d13f = r
 
 [SearchRepo_085913:/]
 admin = rw
@@ -609,6 +837,10 @@ charlie_0ba795 = r
 [SearchRepo_0ca719:/]
 admin = rw
 charlie_0ca719 = r
+
+[SearchRepo_11c0bc:/]
+admin = rw
+charlie_11c0bc = r
 
 [SearchRepo_12991b:/]
 admin = rw
@@ -661,6 +893,14 @@ charlie_5d47e7 = r
 admin = rw
 charlie_653693 = r
 
+[SearchRepo_6a993d:/]
+admin = rw
+charlie_6a993d = r
+
+[SearchRepo_6bc96f:/]
+admin = rw
+charlie_6bc96f = r
+
 [SearchRepo_6df5ae:/]
 admin = rw
 charlie_6df5ae = r
@@ -672,6 +912,10 @@ charlie_6f533c = r
 [SearchRepo_730b0f:/]
 admin = rw
 charlie_730b0f = r
+
+[SearchRepo_737944:/]
+admin = rw
+charlie_737944 = r
 
 [SearchRepo_74ff9b:/]
 admin = rw
@@ -701,6 +945,18 @@ charlie_89d045 = r
 admin = rw
 charlie_8db50f = r
 
+[SearchRepo_8eaa85:/]
+admin = rw
+charlie_8eaa85 = r
+
+[SearchRepo_95edfa:/]
+admin = rw
+charlie_95edfa = r
+
+[SearchRepo_9612d5:/]
+admin = rw
+charlie_9612d5 = r
+
 [SearchRepo_98be4e:/]
 admin = rw
 charlie_98be4e = r
@@ -725,6 +981,14 @@ charlie_9f4da0 = r
 admin = rw
 charlie_a361a8 = r
 
+[SearchRepo_a4759a:/]
+admin = rw
+charlie_a4759a = r
+
+[SearchRepo_ab86d5:/]
+admin = rw
+charlie_ab86d5 = r
+
 [SearchRepo_ad3415:/]
 admin = rw
 charlie_ad3415 = r
@@ -748,6 +1012,14 @@ charlie_b9f373 = r
 admin = rw
 charlie_ba6c70 = r
 
+[SearchRepo_bb5305:/]
+admin = rw
+charlie_bb5305 = r
+
+[SearchRepo_bb6559:/]
+admin = rw
+charlie_bb6559 = r
+
 [SearchRepo_cbb78c:/]
 admin = rw
 charlie_cbb78c = r
@@ -760,6 +1032,10 @@ charlie_ce133b = r
 admin = rw
 charlie_d2d923 = r
 
+[SearchRepo_d856d6:/]
+admin = rw
+charlie_d856d6 = r
+
 [SearchRepo_d924da:/]
 admin = rw
 charlie_d924da = r
@@ -770,6 +1046,10 @@ charlie_df2059 = r
 
 [SearchRepo_e1dc51:/]
 admin = rw
+
+[SearchRepo_e47ec0:/]
+admin = rw
+charlie_e47ec0 = r
 
 [SearchRepo_e69405:/]
 admin = rw
@@ -816,10 +1096,19 @@ admin = rw
 [SlaveRepo_2683c1:/]
 admin = rw
 
+[SlaveRepo_2fc8fc:/]
+admin = rw
+
 [SlaveRepo_3738e1:/]
 admin = rw
 
+[SlaveRepo_3aafcf:/]
+admin = rw
+
 [SlaveRepo_3c9ffa:/]
+admin = rw
+
+[SlaveRepo_3d978e:/]
 admin = rw
 
 [SlaveRepo_458bc0:/]
@@ -838,6 +1127,9 @@ admin = rw
 admin = rw
 
 [SlaveRepo_544808:/]
+admin = rw
+
+[SlaveRepo_586ba1:/]
 admin = rw
 
 [SlaveRepo_58b4eb:/]
@@ -870,13 +1162,31 @@ admin = rw
 [SlaveRepo_756018:/]
 admin = rw
 
+[SlaveRepo_7f867f:/]
+admin = rw
+
 [SlaveRepo_809656:/]
+admin = rw
+
+[SlaveRepo_8b7585:/]
+admin = rw
+
+[SlaveRepo_8e7e72:/]
+admin = rw
+
+[SlaveRepo_926009:/]
+admin = rw
+
+[SlaveRepo_999a7a:/]
 admin = rw
 
 [SlaveRepo_a0f76e:/]
 admin = rw
 
 [SlaveRepo_a31039:/]
+admin = rw
+
+[SlaveRepo_a4e24e:/]
 admin = rw
 
 [SlaveRepo_a707f0:/]
@@ -909,7 +1219,19 @@ admin = rw
 [SlaveRepo_d3556f:/]
 admin = rw
 
+[SlaveRepo_d36431:/]
+admin = rw
+
+[SlaveRepo_e1de6f:/]
+admin = rw
+
 [SlaveRepo_e6be22:/]
+admin = rw
+
+[SlaveRepo_f05f56:/]
+admin = rw
+
+[SlaveRepo_f1f8d2:/]
 admin = rw
 
 [acl_test_repo:/]
@@ -947,6 +1269,15 @@ admin = rw
 @QualityAssurance = r
 admin = rw
 
+[SearchRepo_03d13f:/branches]
+charlie_03d13f = 
+
+[SearchRepo_03d13f:/tags]
+charlie_03d13f = 
+
+[SearchRepo_03d13f:/trunk]
+charlie_03d13f = r
+
 [SearchRepo_085913:/branches]
 charlie_085913 = 
 
@@ -973,6 +1304,15 @@ charlie_0ca719 =
 
 [SearchRepo_0ca719:/trunk]
 charlie_0ca719 = r
+
+[SearchRepo_11c0bc:/branches]
+charlie_11c0bc = 
+
+[SearchRepo_11c0bc:/tags]
+charlie_11c0bc = 
+
+[SearchRepo_11c0bc:/trunk]
+charlie_11c0bc = r
 
 [SearchRepo_12991b:/branches]
 charlie_12991b = 
@@ -1082,6 +1422,24 @@ charlie_653693 =
 [SearchRepo_653693:/trunk]
 charlie_653693 = r
 
+[SearchRepo_6a993d:/branches]
+charlie_6a993d = 
+
+[SearchRepo_6a993d:/tags]
+charlie_6a993d = 
+
+[SearchRepo_6a993d:/trunk]
+charlie_6a993d = r
+
+[SearchRepo_6bc96f:/branches]
+charlie_6bc96f = 
+
+[SearchRepo_6bc96f:/tags]
+charlie_6bc96f = 
+
+[SearchRepo_6bc96f:/trunk]
+charlie_6bc96f = r
+
 [SearchRepo_6df5ae:/branches]
 charlie_6df5ae = 
 
@@ -1108,6 +1466,15 @@ charlie_730b0f =
 
 [SearchRepo_730b0f:/trunk]
 charlie_730b0f = r
+
+[SearchRepo_737944:/branches]
+charlie_737944 = 
+
+[SearchRepo_737944:/tags]
+charlie_737944 = 
+
+[SearchRepo_737944:/trunk]
+charlie_737944 = r
 
 [SearchRepo_74ff9b:/branches]
 charlie_74ff9b = 
@@ -1172,6 +1539,33 @@ charlie_8db50f =
 [SearchRepo_8db50f:/trunk]
 charlie_8db50f = r
 
+[SearchRepo_8eaa85:/branches]
+charlie_8eaa85 = 
+
+[SearchRepo_8eaa85:/tags]
+charlie_8eaa85 = 
+
+[SearchRepo_8eaa85:/trunk]
+charlie_8eaa85 = r
+
+[SearchRepo_95edfa:/branches]
+charlie_95edfa = 
+
+[SearchRepo_95edfa:/tags]
+charlie_95edfa = 
+
+[SearchRepo_95edfa:/trunk]
+charlie_95edfa = r
+
+[SearchRepo_9612d5:/branches]
+charlie_9612d5 = 
+
+[SearchRepo_9612d5:/tags]
+charlie_9612d5 = 
+
+[SearchRepo_9612d5:/trunk]
+charlie_9612d5 = r
+
 [SearchRepo_98be4e:/branches]
 charlie_98be4e = 
 
@@ -1226,6 +1620,24 @@ charlie_a361a8 =
 [SearchRepo_a361a8:/trunk]
 charlie_a361a8 = r
 
+[SearchRepo_a4759a:/branches]
+charlie_a4759a = 
+
+[SearchRepo_a4759a:/tags]
+charlie_a4759a = 
+
+[SearchRepo_a4759a:/trunk]
+charlie_a4759a = r
+
+[SearchRepo_ab86d5:/branches]
+charlie_ab86d5 = 
+
+[SearchRepo_ab86d5:/tags]
+charlie_ab86d5 = 
+
+[SearchRepo_ab86d5:/trunk]
+charlie_ab86d5 = r
+
 [SearchRepo_ad3415:/branches]
 charlie_ad3415 = 
 
@@ -1271,6 +1683,24 @@ charlie_ba6c70 =
 [SearchRepo_ba6c70:/trunk]
 charlie_ba6c70 = r
 
+[SearchRepo_bb5305:/branches]
+charlie_bb5305 = 
+
+[SearchRepo_bb5305:/tags]
+charlie_bb5305 = 
+
+[SearchRepo_bb5305:/trunk]
+charlie_bb5305 = r
+
+[SearchRepo_bb6559:/branches]
+charlie_bb6559 = 
+
+[SearchRepo_bb6559:/tags]
+charlie_bb6559 = 
+
+[SearchRepo_bb6559:/trunk]
+charlie_bb6559 = r
+
 [SearchRepo_cbb78c:/branches]
 charlie_cbb78c = 
 
@@ -1298,6 +1728,15 @@ charlie_d2d923 =
 [SearchRepo_d2d923:/trunk]
 charlie_d2d923 = r
 
+[SearchRepo_d856d6:/branches]
+charlie_d856d6 = 
+
+[SearchRepo_d856d6:/tags]
+charlie_d856d6 = 
+
+[SearchRepo_d856d6:/trunk]
+charlie_d856d6 = r
+
 [SearchRepo_d924da:/branches]
 charlie_d924da = 
 
@@ -1315,6 +1754,15 @@ charlie_df2059 =
 
 [SearchRepo_df2059:/trunk]
 charlie_df2059 = r
+
+[SearchRepo_e47ec0:/branches]
+charlie_e47ec0 = 
+
+[SearchRepo_e47ec0:/tags]
+charlie_e47ec0 = 
+
+[SearchRepo_e47ec0:/trunk]
+charlie_e47ec0 = r
 
 [SearchRepo_e69405:/branches]
 charlie_e69405 = 

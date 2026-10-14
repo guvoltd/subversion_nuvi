@@ -26,8 +26,8 @@ The repository includes pre-built artifacts and automated setup scripts:
 
 | Asset / Script | Location | Purpose |
 | :--- | :--- | :--- |
-| **Pre-built Debian Package** | `dist/subversion-nuvi_1.16.3_amd64.deb` | Ready-to-install `.deb` package for Ubuntu and Debian |
-| **Standalone Tarball** | `dist/subversion-nuvi-1.16.3-linux-x86_64.tar.gz` | Portable distribution package |
+| **Pre-built Debian Package** | `dist/subversion-nuvi_1.16.13_amd64.deb` | Ready-to-install `.deb` package for Ubuntu and Debian |
+| **Standalone Tarball** | `dist/subversion-nuvi-1.16.13-linux-x86_64.tar.gz` | Portable distribution package |
 | **Root Docker Compose** | `docker-compose.yml` | Production Docker Compose service configuration |
 | **Production Dockerfile** | `packaging/docker/Dockerfile` | 3-stage multi-stage image definition |
 | **Turnkey Host Installer** | `packaging/install.sh` | Automated host installer script for Ubuntu / Debian |
@@ -156,10 +156,10 @@ sudo apt-get install -y \
 
 ```bash
 # Install the generated .deb package directly via apt (resolves any missing runtime dependencies)
-sudo apt-get install -y ./dist/subversion-nuvi_1.16.3_amd64.deb
+sudo apt-get install -y ./dist/subversion-nuvi_1.16.13_amd64.deb
 
 # OR install using dpkg:
-sudo dpkg -i dist/subversion-nuvi_1.16.3_amd64.deb
+sudo dpkg -i dist/subversion-nuvi_1.16.13_amd64.deb
 sudo apt-get install -f -y
 ```
 
@@ -258,10 +258,10 @@ sudo systemctl reset-failed
 #### Step 2: Clean Reinstallation
 ```bash
 # Install the fresh .deb package via apt (resolves any dependencies automatically)
-sudo apt-get install -y ./dist/subversion-nuvi_1.16.3_amd64.deb
+sudo apt-get install -y ./dist/subversion-nuvi_1.16.13_amd64.deb
 
 # OR install using dpkg:
-# sudo dpkg -i dist/subversion-nuvi_1.16.3_amd64.deb
+# sudo dpkg -i dist/subversion-nuvi_1.16.13_amd64.deb
 # sudo apt-get install -f -y
 
 # Activate subversion group membership in current shell:
@@ -366,7 +366,7 @@ sudo dnf install -y subversion apr apr-util python3 python3-pip httpd mod_dav_sv
 ### 7.2 Extract Archive
 
 ```bash
-sudo tar -xzf dist/subversion-nuvi-1.16.3-linux-x86_64.tar.gz -C /
+sudo tar -xzf dist/subversion-nuvi-1.16.13-linux-x86_64.tar.gz -C /
 ```
 
 This extracts files into `/opt/nuvi`, `/etc/systemd/system/`, and `/usr/local/bin/`.

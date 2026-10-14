@@ -109,6 +109,15 @@ code, pre, .mono {
   text-transform: uppercase;
 }
 
+.nav-tabs-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .nav-tabs {
   display: flex;
   align-items: center;
@@ -118,10 +127,72 @@ code, pre, .mono {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .nav-tabs::-webkit-scrollbar {
   display: none;
+}
+
+/* Subtle edge gradients indicating overflow */
+.nav-tabs-wrapper.has-scroll-left::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, rgba(30, 41, 59, 0.95), transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.nav-tabs-wrapper.has-scroll-right::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to left, rgba(30, 41, 59, 0.95), transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Scroll Arrow Buttons */
+.nav-scroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.nav-scroll-btn:hover {
+  color: var(--text-main);
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.nav-scroll-btn.left {
+  left: 2px;
+}
+
+.nav-scroll-btn.right {
+  right: 2px;
 }
 
 .nav-tab {
@@ -267,6 +338,14 @@ code, pre, .mono {
 }
 
 /* Card System */
+.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -451,6 +530,43 @@ code, pre, .mono {
   background-color: rgba(255, 255, 255, 0.02);
 }
 
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 10px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  background-color: rgba(15, 23, 42, 0.5);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table td {
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
 /* Badges */
 .badge {
   display: inline-flex;
@@ -593,7 +709,7 @@ code, pre, .mono {
   margin-bottom: 0.4rem;
 }
 
-.form-input, .form-select, .form-textarea {
+.form-input, .form-select, .form-textarea, .form-control {
   width: 100%;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -606,8 +722,13 @@ code, pre, .mono {
   transition: border-color 0.15s ease;
 }
 
-.form-input:focus, .form-select:focus, .form-textarea:focus {
+.form-input:focus, .form-select:focus, .form-textarea:focus, .form-control:focus {
   border-color: var(--accent-primary);
+}
+
+.form-select option, .form-control option {
+  background-color: var(--bg-secondary);
+  color: var(--text-main);
 }
 
 .form-checkbox-label {

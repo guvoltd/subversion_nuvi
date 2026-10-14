@@ -4,6 +4,212 @@
 # To view an issue listed as (issue #XXXX), visit:
 #   https://subversion.apache.org/issue-XXXX
 
+Version 1.16.13
+(14 Oct 2026, based on Version 1.16.12)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.13
+
+ User-visible changes:
+  - GUI Modal & Dark Theme Consistency Refactoring:
+    * Fixed modal background transparency and overlapping content bug in Backup Schedules, Manual Backup,
+      and Restore wizards by refactoring all modals to use React `createPortal` with `.modal-backdrop`
+      and solid `.modal-content` cards (`var(--bg-secondary)`).
+    * Eliminated hardcoded light-mode colors (`#f8fafc`, `#334155`, `#e2e8f0`, `#0f172a`) from inner recurrence
+      cards and tables, ensuring seamless contrast and unified dark-theme appearance.
+    * Added global CSS definitions for `.card`, `.table`, `.table-responsive`, and `.form-control` to prevent
+      unstyled form controls and browser-default white boxes.
+    * Polished Settings subtabs navigation into a streamlined, single-row scrollable strip with clean, compact
+      labels and contextual description banners for every administrative section.
+
+Version 1.16.12
+(13 Oct 2026, based on Version 1.16.11)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.12
+
+ User-visible changes:
+  - Settings Page & Tabbed View Navigation Redesign:
+    * Replaced the "More Tools" dropdown with direct top navigation buttons and an integrated,
+      first-class **Settings** page (`<Settings />`).
+    * Added comprehensive tabbed view in the Settings page providing dedicated, instant tabs for:
+      - **Backup Schedules** (`BackupScheduleJob`): Automated periodic backup queues, cron expressions,
+        retention limits, and task management.
+      - **Backup Archives & DR** (`BackupArchive`): Point-in-time archives, manual backups, integrity verification,
+        and disaster recovery repository restoration.
+      - **Storage Breakdown & Maintenance** (`StorageBreakdown`): FSFS shard packing (`svnadmin pack`),
+        dead transaction cleaner, live SVN integrity verification, and per-repository storage metrics.
+      - **General & Storage**: Server identity, storage roots, and SVN prefix configuration.
+      - **SSL/TLS Certificates**: Certificate lifecycle, CSR generator, and self-signed certificate installer.
+      - **Directory & SSO**: Enterprise LDAP, Active Directory, SAML, and OIDC authentication settings.
+      - **Security & Shield**: Brute-force protection policies and live IP ban monitor.
+      - **Security Hooks**: Pre-commit and post-commit policy configuration.
+      - **Multi-Site Replication**: VDFS replication nodes and slave promotion.
+    * Removed overflow clipping constraints by promoting primary tools (Search, Audit Logs, Locks & Txns,
+      and Settings) directly to the horizontally-scrollable top navigation bar.
+
+Version 1.16.11
+(13 Oct 2026, based on Version 1.16.10)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.11
+
+ User-visible changes:
+  - More Tools Menu Navigation Enhancements:
+    * Elevated Backup Schedules (`BackupScheduleJob`), Backup Archives (`BackupArchive`), and
+      Repository Maintenance & Storage (`StorageBreakdown`) to direct, first-class options in the
+      "More Tools" navigation dropdown.
+    * Integrated deep-linking and dynamic subtab switching in `OperationsTab` so that clicking any of
+      the three tool options immediately routes the administrator to the corresponding interface.
+
+Version 1.16.10
+(13 Oct 2026, based on Version 1.16.9)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.10
+
+ User-visible changes:
+  - Operations & More Tools Overhaul:
+    * Automated Periodic Backup Queues: Configurable background scheduled backups supporting
+      multi-task queues, global (all repositories) or per-repository schedules, and 5 archive
+      types: Full SVN Hotcopy, Incremental Hotcopy, Full SVN Dump (.dump.gz), Incremental SVN Dump,
+      and Security Authz & Configuration Snapshot.
+    * Customizable Destination Directories: Admin can define custom backup destinations (local paths,
+      mount points, NFS shares, or external NAS/SAN directories) with automatic retention pruning.
+    * Native Subversion Maintenance Suite:
+      - FSFS Shard Packing (`svnadmin pack`) to consolidate loose revision and revprop files into
+        1,000-rev shards, eliminating inode exhaustion and maximizing read throughput.
+      - Dead Transaction Purge (`svnadmin rmtxns`) to clean stalled/aborted commit transactions
+        and reclaim disk space without locking active developer sessions.
+      - Live Integrity & Health Check (`svnadmin verify`) with revision range limits and live logs.
+      - Repository Storage Profiler: Comprehensive disk space profiling across revisions, properties,
+        locks, hooks, and configuration files.
+    * Automated Background Scheduler & Admin Notifications: Dedicated background scheduler polling
+      due tasks every 20-30 seconds, generating real-time notification records in the navbar bell.
+    * Disaster Recovery Archives Manager: Point-in-time repository restoration wizard, direct archive
+      downloads, sandbox verification logs, and archive deletion.
+
+Version 1.16.9
+(13 Oct 2026, based on Version 1.16.8)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.9
+
+ User-visible changes:
+  - Commit Logs Viewer Modal Improvements:
+    * Resolved Flexbox squishing bug in the commit log viewer modal where lists of commits
+      (e.g., 50+ commits) were squeezed down to hairline empty bars and expanded message/path
+      details were clipped. Fixed container layout with `flexShrink: 0`, proper auto-overflow,
+      and natural height preservation.
+    * Added Repository vs. Current Path Scope Selector in the Commit Logs modal toolbar:
+      users can seamlessly toggle between viewing folder-specific logs (`/trunk`) and the
+      entire repository (`/`) to see continuous revisions without gaps caused by commits to
+      other directories (branches/tags).
+    * Increased default commit log limit from 25/50 to 100 with dynamic 1000 ("All") option
+      and enhanced search across revisions, authors, commit messages, and modified paths.
+
+Version 1.16.8
+(13 Oct 2026, based on Version 1.16.7)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.8
+
+ User-visible changes:
+  - Admin Notifications & Built-in Log Viewer Notifications Page:
+    * Real-time Repository Update Notifications:
+      Implemented persistent update tracking and notification system for administrator logins.
+      All repository commits (external Subversion CLI / TortoiseSVN client commits and
+      in-browser web uploads/commits) automatically generate notifications and remain
+      visible as unread until explicitly marked as read by the administrator.
+    * Navbar Live Notification Bell & Dropdown Preview:
+      Added a dedicated notification bell icon to the top navigation header for admin users,
+      featuring a real-time unread count badge, auto-polling sync, quick dropdown preview
+      of recent repository commits, instant 'Mark all read' action, and a direct link to the
+      full notification center.
+    * Full Built-in Notification View Page in Repository Viewer:
+      Integrated a comprehensive notifications view directly inside the Repository Browser
+      tab (`RepositoryBrowserTab.tsx`). Features view-switching between directory browsing and
+      notifications feed, repository filtering, unread/read filter tabs, search filtering,
+      detailed commit cards matching the enhanced log viewer (revision pill with copy,
+      author, date, full commit message box, changed paths breakdown with colored [A/M/D/R]
+      action badges, click-to-copy file path, and direct 'Jump to folder/file in browser' action).
+    * Notification Management & Bulk Operations:
+      Provides individual mark-as-read / mark-as-unread toggles, single notification deletion,
+      bulk mark-all-read, and clearing of read notifications.
+
+Version 1.16.7
+(13 Oct 2026, based on Version 1.16.6)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.7
+
+ User-visible changes:
+  - Web Client Commit Log Viewer & History Navigation:
+    * Commit Log Count Limit Selector & Controls:
+      Introduced limit controls in the commit history modal toolbar with options for
+      10, 25, 50, 100, 250, and 500 commits, allowing users to configure the commit
+      retrieval depth according to their repository size.
+    * 'Load More Commits' Incremental Fetching:
+      Added an inline 'Load More Commits' button at the bottom of the log viewer list,
+      enabling users to smoothly paginate through older repository revisions.
+    * Expandable Commit Details & Changed File Paths:
+      Fixed commit detail expansion where cards were cut off and changed paths were
+      invisible. Cards now support single-click row expansion/collapse with clean 1-line
+      message summaries in collapsed view, full multiline messages in expanded view, and
+      a dedicated scrollable changed paths container with colored action badges
+      ([A] Added, [M] Modified, [D] Deleted, [R] Replaced) and click-to-copy path support.
+    * Subversion XML Path & Message Parsing Robustness:
+      Enhanced backend native SVN log XML parser to safely strip whitespace, extract
+      copyfrom sources, and ensure all commit paths and messages format cleanly.
+
+Version 1.16.6
+(13 Oct 2026, based on Version 1.16.5)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.6
+
+ User-visible changes:
+  - Top Navigation Panel & Mouse Wheel Scrolling Enhancements:
+    * Mouse Wheel Horizontal Scroll Translation:
+      Resolved top panel focus and scrolling issues by actively feeding mouse round
+      scroll wheel input (vertical deltaY and deltaX) into the top navigation panel.
+      Rotating the mouse wheel forward/downward smoothly scrolls the navigation bar right,
+      shifting offscreen tabs (such as 'Access Rules' and 'Users & Groups') into view from
+      the right while moving earlier tabs (such as 'Dashboard') out to the left.
+    * Automatic Active Tab & Focus Auto-Centering:
+      Whenever a tab is selected or receives keyboard focus, the navigation container
+      automatically centers and scrolls the active button into clear view.
+    * Visual Edge Overflow Gradients & Quick Scroll Arrows:
+      Introduced sleek left/right edge gradients and dedicated quick-scroll buttons
+      ('ChevronLeft' and 'ChevronRight') indicating horizontal overflow.
+
+Version 1.16.5
+(13 Oct 2026, based on Version 1.16.4)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.5
+
+ User-visible changes:
+  - Web Client & Repository Browser Commit Log Enhancements:
+    * Interactive Commit Logs / History Inspection Modal:
+      Added an in-depth Commit Logs window to the Web Client view allowing users
+      to inspect the complete commit history for any repository, folder, or file.
+    * Clickable Revision Badges & Path Triggers:
+      Made the revision badges ('r{rev}') in the repository directory explorer table
+      interactive buttons. Clicking any revision number directly opens the commit history
+      modal for that specific directory or file.
+    * Directory Toolbar & File Viewer History Actions:
+      Added a dedicated "Commit Logs" button to the directory toolbar (for the current
+      folder) and to the file viewer modal (for the currently opened file).
+    * Search, Filtering & Changed Paths Inspection:
+      Equipped the commit logs modal with a real-time search filter (matching revision,
+      commit message, author, and changed files), collapsible changed path listings
+      with color-coded modification tags (Added, Modified, Deleted, Replaced),
+      and one-click clipboard copying of revision numbers.
+
+Version 1.16.4
+(13 Oct 2026, based on Version 1.16.3)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.4
+
+ User-visible changes:
+  - Web Console & Client Integration Enhancements:
+    * Resilient Clipboard Copy Engine:
+      Fixed clipboard copy execution failures occurring in non-HTTPS, LAN,
+      and restrictive iframe/webview browser contexts by introducing a multi-tier
+      clipboard utility ('clipboard.ts') with asynchronous clipboard API and
+      hidden DOM textarea fallback.
+    * Interactive Copy Pulldown Submenu ('CheckoutCopyButton.tsx'):
+      Reimplemented the repository checkout copy button in both the Repositories
+      detail tab and Welcome repository cards with a sleek pulldown menu.
+      Users can now choose between:
+        - "Copy Checkout Command": Copies the complete 'svn checkout <url>' command.
+        - "Copy URL Only": Copies the raw repository WebDAV endpoint URL.
+    * Instant Contextual Feedback & Event Handling:
+      Added explicit event isolation (preventDefault / stopPropagation), click-outside
+      dismissal, and dynamic button confirmation badges ('Copied Command!' / 'Copied URL!').
+
 Version 1.16.3
 (12 Oct 2026, based on Version 1.16.2)
 https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.3

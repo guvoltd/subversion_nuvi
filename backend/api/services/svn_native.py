@@ -431,5 +431,67 @@ class SvnNativeEngine:
             })
         return blame_lines
 
+    def get_commit_logs(self, path: str, subpath: str = "/", limit: int = 50, revision: int = -1) -> List[Dict[str, Any]]:
+        """Retrieve commit history logs for a repository or specific path."""
+        import os
+        import subprocess
+        import urllib.parse
+        import xml.etree.ElementTree as ET
+
+        clean_subpath = subpath.strip("/")
+        abs_path = os.path.abspath(path)
+        quoted_path = urllib.parse.quote(abs_path, safe="/")
+        if clean_subpath:
+            quoted_subpath = urllib.parse.quote(clean_subpath, safe="/")
+            repo_url = f"file://{quoted_path}/{quoted_subpath}"
+        else:
+            repo_url = f"file://{quoted_path}"
+
+        cmd = ["svn", "log", repo_url, "-v", "--xml"]
+        if limit and limit > 0:
+            cmd.extend(["-l", str(limit)])
+        if revision and revision > 0:
+            cmd.extend(["-r", f"{revision}:1"])
+
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            root = ET.fromstring(res.stdout)
+            logs = []
+            for entry in root.findall("logentry"):
+                rev = int(entry.attrib.get("revision", 0))
+                author = (entry.findtext("author") or "anonymous").strip()
+                date = (entry.findtext("date") or "").strip()
+                raw_msg = entry.findtext("msg")
+                msg = raw_msg.strip() if raw_msg else ""
+                paths = []
+                paths_el = entry.find("paths")
+                if paths_el is not None:
+                    for p in paths_el.findall("path"):
+                        act = (p.attrib.get("action", "") or "M").strip().upper()
+                        kind = (p.attrib.get("kind", "") or "").strip()
+                        path_str = (p.text or p.attrib.get("path", "") or p.attrib.get("name", "") or "").strip()
+                        copyfrom_path = (p.attrib.get("copyfrom-path", "") or "").strip()
+                        copyfrom_rev = (p.attrib.get("copyfrom-rev", "") or "").strip()
+                        paths.append({
+                            "action": act,
+                            "kind": kind,
+                            "path": path_str,
+                            "copyfrom_path": copyfrom_path,
+                            "copyfrom_rev": copyfrom_rev
+                        })
+                logs.append({
+                    "revision": rev,
+                    "author": author,
+                    "date": date,
+                    "message": msg,
+                    "changed_paths": paths
+                })
+            return logs
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.strip() or str(e)
+            raise SubversionNativeError(f"Failed to get commit logs for '{subpath}': {err_msg}")
+        except Exception as e:
+            raise SubversionNativeError(f"Error parsing commit logs: {str(e)}")
+
 # Global singleton
 svn_engine = SvnNativeEngine()

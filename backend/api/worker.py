@@ -18,17 +18,26 @@ def run_worker_loop():
     logger.info("Subversion Nuvi Background Worker Daemon initializing...")
     logger.info(f"Connected to metadata db: {config.DB_PATH}")
     logger.info(f"Repositories directory: {config.REPOSITORIES_ROOT}")
+
+    from backend.api.db import SessionLocal
+    from backend.api.services.backup_service import BackupService
     
     while True:
         try:
-            # Poll background jobs from database (Phase 5 will add job dispatch)
-            time.sleep(10)
+            db = SessionLocal()
+            try:
+                executed = BackupService.execute_due_scheduled_jobs(db)
+                if executed > 0:
+                    logger.info(f"Successfully processed {executed} due scheduled backup job(s).")
+            finally:
+                db.close()
+            time.sleep(15)
         except KeyboardInterrupt:
             logger.info("Worker shutting down gracefully...")
             break
         except Exception as e:
             logger.error(f"Error in worker loop: {e}", exc_info=True)
-            time.sleep(5)
+            time.sleep(10)
 
 if __name__ == "__main__":
     run_worker_loop()

@@ -18,6 +18,7 @@ import {
 import { AuthUser, Repository, ServerConfig } from '../types';
 import { api } from '../services/api';
 import { buildCheckoutUrl } from '../utils/checkoutUrl';
+import { CheckoutCopyButton } from './CheckoutCopyButton';
 import { NUVI_LOGO_SRC } from '../assets/logo';
 
 interface WelcomeTabProps {
@@ -41,22 +42,12 @@ export const WelcomeTab: React.FC<WelcomeTabProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Copy state
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [repoSearch, setRepoSearch] = useState('');
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
 
   useEffect(() => {
     api.getServerConfig().then(setServerConfig).catch(() => {});
   }, []);
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => {
-      setCopiedId(null);
-    }, 2000);
-  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,7 +248,6 @@ export const WelcomeTab: React.FC<WelcomeTabProps> = ({
               {filteredRepos.map((repo) => {
                 const checkoutUrl = buildCheckoutUrl(repo.name, serverConfig);
                 const checkoutCmd = `svn checkout ${checkoutUrl}`;
-                const isCopied = copiedId === `repo-${repo.id}`;
 
                 return (
                   <div
@@ -323,16 +313,12 @@ export const WelcomeTab: React.FC<WelcomeTabProps> = ({
                       <span style={{ flex: 1, overflowX: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {checkoutCmd}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(checkoutCmd, `repo-${repo.id}`)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ padding: '0.2rem 0.45rem', marginLeft: '0.4rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                        title="Copy SVN checkout command"
-                      >
-                        {isCopied ? <Check size={12} color="#34d399" /> : <Copy size={12} />}
-                        <span>{isCopied ? 'Copied' : 'Copy'}</span>
-                      </button>
+                      <CheckoutCopyButton
+                        repoName={repo.name}
+                        serverConfig={serverConfig}
+                        size="sm"
+                        style={{ marginLeft: '0.4rem' }}
+                      />
                     </div>
 
                     {/* Actions */}

@@ -65,7 +65,7 @@ sudo apt update
 sudo apt install -y subversion libapache2-mod-svn apache2 python3 python3-venv python3-pip python3-multipart
 2. Install the Rebuilt .deb Package
 bash
-sudo dpkg -i /media/uv/winData/proTEmp/subversion_nuvi/dist/subversion-nuvi_1.16.3_amd64.deb
+sudo dpkg -i /media/uv/winData/proTEmp/subversion_nuvi/dist/subversion-nuvi_1.16.13_amd64.deb
 
 (The postinst script will automatically create users, initialize /opt/nuvi/data, set up permissions, and configure systemd services with ProtectHome=false).
 

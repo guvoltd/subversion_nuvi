@@ -10,19 +10,46 @@ from pathlib import Path
 
 from backend.api.config import config
 from backend.api.db import init_db
-from backend.api.routers import repositories, server, users, groups, acl, shield, auth, browser, search, audit, operations, certificates, directory
+from backend.api.routers import repositories, server, users, groups, acl, shield, auth, browser, search, audit, operations, certificates, directory, notifications
+
+import asyncio
+import logging
+
+logger = logging.getLogger("nuvi.scheduler")
+
+async def _background_scheduler():
+    from backend.api.db import SessionLocal
+    from backend.api.services.backup_service import BackupService
+    while True:
+        try:
+            await asyncio.sleep(20)
+            db = SessionLocal()
+            try:
+                BackupService.execute_due_scheduled_jobs(db)
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error in backup scheduler: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: ensure tables exist
     init_db()
+    task = asyncio.create_task(_background_scheduler())
     yield
-    # Shutdown logic if any
+    # Shutdown logic
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 app = FastAPI(
     title="Subversion Nuvi API",
     description="Enterprise Management & Service API for Apache Subversion",
-    version="1.16.3",
+    version="1.16.13",
     lifespan=lifespan,
     docs_url=f"{config.API_URL_PREFIX}/docs",
     openapi_url=f"{config.API_URL_PREFIX}/openapi.json",
@@ -51,6 +78,7 @@ app.include_router(audit.router, prefix=config.API_URL_PREFIX)
 app.include_router(operations.router, prefix=config.API_URL_PREFIX)
 app.include_router(certificates.router, prefix=config.API_URL_PREFIX)
 app.include_router(directory.router, prefix=config.API_URL_PREFIX)
+app.include_router(notifications.router, prefix=config.API_URL_PREFIX)
 
 @app.get("/health", tags=["Health"])
 def health_check():

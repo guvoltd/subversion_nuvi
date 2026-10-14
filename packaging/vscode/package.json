@@ -2,7 +2,7 @@
   "name": "subversion-nuvi",
   "displayName": "Subversion Nuvi (VisualSVN Integration)",
   "description": "Enterprise Apache Subversion & VisualSVN integration with live tree explorer, quick diffs, blame, and repository management.",
-  "version": "1.16.3",
+  "version": "1.16.13",
   "publisher": "nuvi-team",
   "engines": {
     "vscode": "^1.80.0"

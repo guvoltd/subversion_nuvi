@@ -67,6 +67,52 @@ def init_db():
             if cols and "htpasswd_hash" not in cols:
                 conn.exec_driver_sql("ALTER TABLE users ADD COLUMN htpasswd_hash VARCHAR(128)")
                 conn.commit()
+
+            cursor_arch = conn.exec_driver_sql("PRAGMA table_info(backup_archive_records)")
+            arch_rows = cursor_arch.fetchall()
+            arch_cols = [row[1] for row in arch_rows]
+            repo_id_col = next((row for row in arch_rows if row[1] == "repository_id"), None)
+
+            # If repository_id is NOT NULL (row[3] == 1), migrate table to allow NULL
+            if repo_id_col and repo_id_col[3] == 1:
+                conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                conn.exec_driver_sql("""
+                    CREATE TABLE backup_archive_records_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        repository_id INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+                        policy_id INTEGER REFERENCES backup_policies(id) ON DELETE SET NULL,
+                        job_id INTEGER REFERENCES backup_schedule_jobs(id) ON DELETE SET NULL,
+                        backup_type VARCHAR(32) NOT NULL,
+                        archive_filename VARCHAR(255) NOT NULL,
+                        archive_path VARCHAR(512) NOT NULL,
+                        revision_from INTEGER NOT NULL,
+                        revision_to INTEGER NOT NULL,
+                        size_bytes INTEGER NOT NULL,
+                        sha256_checksum VARCHAR(64),
+                        is_encrypted BOOLEAN NOT NULL,
+                        verification_status VARCHAR(32) NOT NULL,
+                        verification_log TEXT,
+                        verified_at DATETIME,
+                        created_at DATETIME
+                    );
+                """)
+                if "job_id" in arch_cols:
+                    conn.exec_driver_sql("""
+                        INSERT INTO backup_archive_records_new (id, repository_id, policy_id, job_id, backup_type, archive_filename, archive_path, revision_from, revision_to, size_bytes, sha256_checksum, is_encrypted, verification_status, verification_log, verified_at, created_at)
+                        SELECT id, repository_id, policy_id, job_id, backup_type, archive_filename, archive_path, revision_from, revision_to, size_bytes, sha256_checksum, is_encrypted, verification_status, verification_log, verified_at, created_at FROM backup_archive_records;
+                    """)
+                else:
+                    conn.exec_driver_sql("""
+                        INSERT INTO backup_archive_records_new (id, repository_id, policy_id, backup_type, archive_filename, archive_path, revision_from, revision_to, size_bytes, sha256_checksum, is_encrypted, verification_status, verification_log, verified_at, created_at)
+                        SELECT id, repository_id, policy_id, backup_type, archive_filename, archive_path, revision_from, revision_to, size_bytes, sha256_checksum, is_encrypted, verification_status, verification_log, verified_at, created_at FROM backup_archive_records;
+                    """)
+                conn.exec_driver_sql("DROP TABLE backup_archive_records;")
+                conn.exec_driver_sql("ALTER TABLE backup_archive_records_new RENAME TO backup_archive_records;")
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+                conn.commit()
+            elif arch_cols and "job_id" not in arch_cols:
+                conn.exec_driver_sql("ALTER TABLE backup_archive_records ADD COLUMN job_id INTEGER REFERENCES backup_schedule_jobs(id)")
+                conn.commit()
         except Exception:
             pass
 

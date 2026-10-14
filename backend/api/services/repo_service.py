@@ -606,7 +606,7 @@ class RepositoryService:
 
         return ServerStatusResponse(
             server_name=config.SERVER_NAME,
-            version="1.16.3 (Subversion 1.16.3)",
+            version="1.16.13 (Subversion 1.16.13)",
             uptime_seconds=time.time() - START_TIME,
             uptime_formatted=uptime_str,
             repositories_count=len(repos),

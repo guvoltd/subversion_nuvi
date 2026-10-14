@@ -112,7 +112,7 @@ class TransactionResponse(BaseModel):
 
 class ServerStatusResponse(BaseModel):
     server_name: str
-    version: str = "1.16.3 (Subversion 1.16.3)"
+    version: str = "1.16.13 (Subversion 1.16.13)"
     uptime_seconds: float
     uptime_formatted: Optional[str] = ""
     repositories_count: int
@@ -294,8 +294,10 @@ class BackupPolicyResponse(BaseModel):
 
 class BackupArchiveResponse(BaseModel):
     id: int
-    repository_id: int
+    repository_id: Optional[int] = None
     repository_name: Optional[str] = None
+    job_id: Optional[int] = None
+    job_name: Optional[str] = None
     backup_type: str
     archive_filename: str
     archive_path: str
@@ -308,6 +310,64 @@ class BackupArchiveResponse(BaseModel):
     verification_log: Optional[str] = None
     verified_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+
+class BackupScheduleJobCreateRequest(BaseModel):
+    name: str
+    repository_id: Optional[int] = None
+    backup_type: str = "hotcopy_full" # 'hotcopy_full', 'hotcopy_incremental', 'dump_full', 'dump_incremental', 'authz_config'
+    schedule_frequency: str = "daily" # 'hourly', 'daily', 'weekly', 'monthly', 'interval', 'cron'
+    schedule_time: str = "02:00"
+    schedule_weekday: int = 6
+    schedule_interval_hours: int = 24
+    schedule_cron: str = "0 2 * * *"
+    destination_path: Optional[str] = None
+    is_enabled: bool = True
+    skip_if_unchanged: bool = True
+    auto_verify: bool = True
+    retention_count: int = 7
+    encryption_enabled: bool = False
+    encryption_passphrase: Optional[str] = None
+
+class BackupScheduleJobUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    repository_id: Optional[int] = None
+    backup_type: Optional[str] = None
+    schedule_frequency: Optional[str] = None
+    schedule_time: Optional[str] = None
+    schedule_weekday: Optional[int] = None
+    schedule_interval_hours: Optional[int] = None
+    schedule_cron: Optional[str] = None
+    destination_path: Optional[str] = None
+    is_enabled: Optional[bool] = None
+    skip_if_unchanged: Optional[bool] = None
+    auto_verify: Optional[bool] = None
+    retention_count: Optional[int] = None
+    encryption_enabled: Optional[bool] = None
+    encryption_passphrase: Optional[str] = None
+
+class BackupScheduleJobResponse(BaseModel):
+    id: int
+    name: str
+    repository_id: Optional[int] = None
+    repository_name: Optional[str] = None
+    backup_type: str
+    schedule_frequency: str
+    schedule_time: str
+    schedule_weekday: int
+    schedule_interval_hours: int
+    schedule_cron: str
+    destination_path: str
+    is_enabled: bool
+    skip_if_unchanged: bool
+    auto_verify: bool
+    retention_count: int
+    encryption_enabled: bool
+    last_run_at: Optional[datetime] = None
+    last_run_status: Optional[str] = None
+    last_run_message: Optional[str] = None
+    next_run_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class BackupVerifyResponse(BaseModel):
     archive_id: int
@@ -400,4 +460,34 @@ class PATCreatedResponse(BaseModel):
     token: str
     token_prefix: str
     expires_at: Optional[datetime] = None
+
+
+# --- Notification DTOs ---
+
+class NotificationResponse(BaseModel):
+    id: int
+    repository_id: Optional[int] = None
+    repository_name: str
+    revision: Optional[int] = None
+    author: Optional[str] = None
+    message: Optional[str] = None
+    changed_paths: List[Dict[str, Any]] = []
+    action_type: str = "commit"
+    summary: Optional[str] = None
+    is_read: bool = False
+    read_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+class NotificationListResponse(BaseModel):
+    total: int
+    unread_count: int
+    notifications: List[NotificationResponse]
+
+class UnreadCountResponse(BaseModel):
+    unread_count: int
+
+class NotificationMarkReadRequest(BaseModel):
+    notification_ids: Optional[List[int]] = None
+    repository_id: Optional[int] = None
+    mark_all: bool = False
 

@@ -229,7 +229,7 @@ class BackupPolicy(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
-    backup_type = Column(String(32), default="full", nullable=False) # 'full' or 'incremental'
+    backup_type = Column(String(32), default="full", nullable=False) # 'full', 'incremental', 'dump_full', 'dump_incremental', 'authz_config'
     schedule_cron = Column(String(64), default="0 2 * * *", nullable=False)
     destination_path = Column(String(512), nullable=False)
     is_enabled = Column(Boolean, default=True, nullable=False)
@@ -245,13 +245,42 @@ class BackupPolicy(Base):
 
     repository = relationship("Repository")
 
+class BackupScheduleJob(Base):
+    __tablename__ = "backup_schedule_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False) # e.g. "Weekly Hotcopy (All Repos)", "Nightly SVN Dump"
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True) # None = All Repositories
+    backup_type = Column(String(32), default="hotcopy_full", nullable=False) # 'hotcopy_full', 'hotcopy_incremental', 'dump_full', 'dump_incremental', 'authz_config'
+    schedule_frequency = Column(String(32), default="daily", nullable=False) # 'hourly', 'daily', 'weekly', 'monthly', 'interval', 'cron'
+    schedule_time = Column(String(16), default="02:00", nullable=False) # HH:MM
+    schedule_weekday = Column(Integer, default=6, nullable=False) # 0=Mon, ..., 6=Sun
+    schedule_interval_hours = Column(Integer, default=24, nullable=False)
+    schedule_cron = Column(String(64), default="0 2 * * *", nullable=False)
+    destination_path = Column(String(512), nullable=False) # default or custom
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    skip_if_unchanged = Column(Boolean, default=True, nullable=False)
+    auto_verify = Column(Boolean, default=True, nullable=False)
+    retention_count = Column(Integer, default=7, nullable=False) # keep last N archives
+    encryption_enabled = Column(Boolean, default=False, nullable=False)
+    encryption_passphrase = Column(String(255), nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    last_run_status = Column(String(32), nullable=True) # 'success', 'skipped', 'failed', 'running'
+    last_run_message = Column(Text, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    repository = relationship("Repository")
+
 class BackupArchiveRecord(Base):
     __tablename__ = "backup_archive_records"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
     policy_id = Column(Integer, ForeignKey("backup_policies.id", ondelete="SET NULL"), nullable=True)
-    backup_type = Column(String(32), default="full", nullable=False) # 'full' or 'incremental'
+    job_id = Column(Integer, ForeignKey("backup_schedule_jobs.id", ondelete="SET NULL"), nullable=True, index=True)
+    backup_type = Column(String(32), default="full", nullable=False) # 'full', 'incremental', 'hotcopy_full', 'hotcopy_incremental', 'dump_full', 'dump_incremental', 'authz_config'
     archive_filename = Column(String(255), nullable=False)
     archive_path = Column(String(512), nullable=False)
     revision_from = Column(Integer, default=0, nullable=False)
@@ -266,6 +295,7 @@ class BackupArchiveRecord(Base):
 
     repository = relationship("Repository")
     policy = relationship("BackupPolicy")
+    job = relationship("BackupScheduleJob")
 
 class HookConfig(Base):
     __tablename__ = "hook_configurations"
@@ -312,6 +342,25 @@ class ReplicationNode(Base):
     compression_enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    repository = relationship("Repository")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
+    repository_name = Column(String(128), nullable=False, index=True)
+    revision = Column(Integer, nullable=True, index=True)
+    author = Column(String(128), nullable=True)
+    message = Column(Text, nullable=True)
+    changed_paths_json = Column(Text, nullable=True)  # JSON array of {action, kind, path, copyfrom_path, copyfrom_rev}
+    action_type = Column(String(32), default="commit", nullable=False)  # commit, upload, mkdir, delete
+    summary = Column(String(512), nullable=True)
+    is_read = Column(Boolean, default=False, nullable=False, index=True)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     repository = relationship("Repository")
 

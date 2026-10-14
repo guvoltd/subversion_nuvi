@@ -253,7 +253,13 @@ export const App: React.FC = () => {
 
             {activeTab === 'audit' && <AuditTab />}
 
-            {activeTab === 'operations' && <OperationsTab repositories={repositories} />}
+            {activeTab === 'operations' && <SettingsTab repositories={repositories} initialSubTab="schedules" />}
+
+            {activeTab === 'backup-schedules' && <SettingsTab repositories={repositories} initialSubTab="schedules" />}
+
+            {activeTab === 'backup-archives' && <SettingsTab repositories={repositories} initialSubTab="archives" />}
+
+            {activeTab === 'maintenance' && <SettingsTab repositories={repositories} initialSubTab="maintenance" />}
 
             {activeTab === 'users-groups' && <UsersGroupsTab />}
 
@@ -269,7 +275,7 @@ export const App: React.FC = () => {
               />
             )}
 
-            {activeTab === 'settings' && <SettingsTab />}
+            {activeTab === 'settings' && <SettingsTab repositories={repositories} initialSubTab="schedules" />}
           </>
         )}
       </main>

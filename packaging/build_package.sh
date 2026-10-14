@@ -4,7 +4,7 @@ set -e
 # Subversion Nuvi - Automated Distribution Packaging Script
 # Generates .deb (Debian/Ubuntu) and standalone .tar.gz distribution archives.
 
-VERSION="1.16.3"
+VERSION="1.16.13"
 PACKAGE_NAME="subversion-nuvi"
 ARCH="amd64"
 

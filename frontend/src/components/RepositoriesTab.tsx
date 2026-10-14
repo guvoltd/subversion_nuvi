@@ -18,6 +18,7 @@ import {
 import { Repository, RepositoryStats, ArchiveImportResponse, ServerConfig } from '../types';
 import { api } from '../services/api';
 import { buildCheckoutUrl } from '../utils/checkoutUrl';
+import { CheckoutCopyButton } from './CheckoutCopyButton';
 import { ImportArchiveModal } from './ImportArchiveModal';
 import { ExportRepoModal } from './ExportRepoModal';
 import { SupervisorsModal } from './SupervisorsModal';
@@ -44,7 +45,6 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
   const [repoStats, setRepoStats] = useState<RepositoryStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [copiedUrl, setCopiedUrl] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteFilesOnDisk, setDeleteFilesOnDisk] = useState(true);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -93,13 +93,6 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
     } finally {
       setStatsLoading(false);
     }
-  };
-
-  const handleCopyCheckout = (repoName: string) => {
-    const url = buildCheckoutUrl(repoName, serverConfig);
-    navigator.clipboard.writeText(`svn checkout ${url}`);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
   };
 
   const handleVerify = async (repoId: number) => {
@@ -327,14 +320,11 @@ export const RepositoriesTab: React.FC<RepositoriesTabProps> = ({
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     svn checkout {buildCheckoutUrl(selectedRepo.name, serverConfig)}
                   </span>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleCopyCheckout(selectedRepo.name)}
+                  <CheckoutCopyButton
+                    repoName={selectedRepo.name}
+                    serverConfig={serverConfig}
                     style={{ marginLeft: '0.5rem' }}
-                  >
-                    {copiedUrl ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
-                    {copiedUrl ? 'Copied' : 'Copy'}
-                  </button>
+                  />
                 </div>
               </div>
 

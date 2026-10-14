@@ -202,3 +202,112 @@ export interface RepositorySupervisor {
   created_at: string;
 }
 
+export interface NotificationChangedPath {
+  action: string;
+  kind?: string;
+  path: string;
+  copyfrom_path?: string;
+  copyfrom_rev?: string;
+}
+
+export interface AdminNotification {
+  id: number;
+  repository_id: number | null;
+  repository_name: string;
+  revision: number | null;
+  author: string | null;
+  message: string | null;
+  changed_paths: NotificationChangedPath[];
+  action_type: string;
+  summary: string | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string | null;
+}
+
+export interface NotificationListResponse {
+  total: number;
+  unread_count: number;
+  notifications: AdminNotification[];
+}
+
+export interface UnreadCountResponse {
+  unread_count: number;
+}
+
+export type BackupType = 'hotcopy_full' | 'hotcopy_incremental' | 'dump_full' | 'dump_incremental' | 'authz_config';
+export type ScheduleFrequency = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom_cron';
+
+export interface BackupScheduleJob {
+  id: number;
+  name: string;
+  repository_id: number | null;
+  repository_name?: string;
+  backup_type: string;
+  schedule_frequency: string;
+  schedule_time: string;
+  schedule_weekday?: number | null;
+  schedule_interval_hours?: number | null;
+  schedule_cron?: string | null;
+  destination_path: string;
+  is_enabled: boolean;
+  skip_if_unchanged: boolean;
+  auto_verify: boolean;
+  retention_count: number;
+  encryption_enabled: boolean;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_run_message: string | null;
+  next_run_at: string | null;
+  created_at: string | null;
+  updated_at?: string | null;
+}
+
+export interface BackupScheduleJobCreate {
+  name: string;
+  repository_id?: number | null;
+  backup_type: string;
+  schedule_frequency: string;
+  schedule_time?: string;
+  schedule_weekday?: number;
+  schedule_interval_hours?: number;
+  schedule_cron?: string;
+  destination_path?: string;
+  is_enabled?: boolean;
+  skip_if_unchanged?: boolean;
+  auto_verify?: boolean;
+  retention_count?: number;
+  encryption_enabled?: boolean;
+  encryption_passphrase?: string;
+}
+
+export interface BackupArchive {
+  id: number;
+  repository_id: number | null;
+  repository_name?: string;
+  archive_filename: string;
+  archive_path: string;
+  backup_type: string;
+  size_bytes: number;
+  is_encrypted: boolean;
+  sha256_checksum: string;
+  revision_from: number;
+  revision_to: number;
+  verification_status: string;
+  job_id?: number | null;
+  created_at: string;
+}
+
+export interface StorageBreakdown {
+  repository_id: number;
+  repository_name: string;
+  total_size_bytes: number;
+  db_size_bytes: number;
+  revs_size_bytes: number;
+  revprops_size_bytes: number;
+  locks_size_bytes: number;
+  hooks_size_bytes: number;
+  conf_size_bytes: number;
+  revision_count: number;
+}
+

@@ -1,11 +1,14 @@
 """
 Subversion Nuvi - Operations, Disaster Recovery & Replication API Router
-Provides endpoints for Hot Backups, GFS Pruning, AES-256-GCM Encryption,
-Sandbox Verification, Hook Engine, and Multi-Site Replication.
+Provides endpoints for Hot Backups, Dump Archives, Authz Snapshots, Scheduled Job Queue,
+GFS Pruning, AES-256-GCM Encryption, Sandbox Verification, FSFS Shard Packing,
+Dead Transaction Cleaning, Storage Profiling, Hook Engine, and Multi-Site Replication.
 """
 
 from typing import List, Optional, Dict, Any
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,21 +19,26 @@ from backend.api.models.dto import (
     BackupArchiveResponse,
     BackupVerifyResponse,
     BackupRestoreRequest,
+    BackupScheduleJobCreateRequest,
+    BackupScheduleJobUpdateRequest,
+    BackupScheduleJobResponse,
     HookConfigUpdateRequest,
     HookConfigResponse,
     ReplicationNodeCreateRequest,
     ReplicationNodeResponse,
 )
+from backend.api.models.schema import Repository, BackupArchiveRecord
 from backend.api.services.backup_service import BackupService
+from backend.api.services.maintenance_service import MaintenanceService
 from backend.api.services.hook_service import HookService
 from backend.api.services.replication_service import ReplicationService
 
 router = APIRouter(prefix="/operations", tags=["Operations & DR"])
 
-# --- Hot Backups & DR ---
+# --- Request Schemas ---
 
 class RunBackupRequest(BaseModel):
-    backup_type: str = "full"
+    backup_type: str = "hotcopy_full"
     force: bool = False
     passphrase: Optional[str] = None
 
@@ -39,7 +47,59 @@ class ImportSeedRequest(BaseModel):
     new_repository_name: str
     master_url: str
 
-@router.get("/backup/policy", response_model=BackupPolicyResponse, summary="Get backup policy")
+class VerifyRepoRequest(BaseModel):
+    start_revision: Optional[int] = None
+    end_revision: Optional[int] = None
+
+# --- Scheduled Backup Jobs Queue ---
+
+@router.get("/backup/schedules", summary="List all scheduled backup jobs")
+def list_backup_schedules(repo_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    return BackupService.list_schedule_jobs(db, repo_id)
+
+@router.post("/backup/schedules", summary="Create a new scheduled backup job")
+def create_backup_schedule(req: BackupScheduleJobCreateRequest, db: Session = Depends(get_db)):
+    try:
+        return BackupService.create_schedule_job(db, req)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.put("/backup/schedules/{job_id}", summary="Update a scheduled backup job")
+def update_backup_schedule(job_id: int, req: BackupScheduleJobUpdateRequest, db: Session = Depends(get_db)):
+    try:
+        return BackupService.update_schedule_job(db, job_id, req)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.delete("/backup/schedules/{job_id}", summary="Delete a scheduled backup job")
+def delete_backup_schedule(job_id: int, db: Session = Depends(get_db)):
+    try:
+        return BackupService.delete_schedule_job(db, job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.post("/backup/schedules/{job_id}/run", summary="Trigger scheduled backup job now")
+def run_backup_schedule_now(job_id: int, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    try:
+        return BackupService.run_scheduled_job(db, job_id, force=True, actor="admin", client_ip=client_ip)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/backup/schedules/{job_id}/toggle", summary="Enable or pause a scheduled backup job")
+def toggle_backup_schedule(job_id: int, db: Session = Depends(get_db)):
+    try:
+        return BackupService.toggle_schedule_job(db, job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+# --- Hot Backups & Manual Triggers ---
+
+@router.get("/backup/policy", response_model=BackupPolicyResponse, summary="Get legacy backup policy")
 def get_backup_policy(repo_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     policy = BackupService.get_or_create_policy(db, repo_id)
     return BackupPolicyResponse(
@@ -59,11 +119,11 @@ def get_backup_policy(repo_id: Optional[int] = Query(None), db: Session = Depend
         updated_at=policy.updated_at
     )
 
-@router.post("/backup/policy", response_model=BackupPolicyResponse, summary="Update backup policy")
+@router.post("/backup/policy", response_model=BackupPolicyResponse, summary="Update legacy backup policy")
 def update_backup_policy(req: BackupPolicyCreateRequest, db: Session = Depends(get_db)):
     return BackupService.update_policy(db, req)
 
-@router.post("/backup/run/{repo_id}", summary="Trigger repository hot backup")
+@router.post("/backup/run/{repo_id}", summary="Trigger repository backup immediately")
 def trigger_backup(
     repo_id: int,
     req: RunBackupRequest,
@@ -72,11 +132,18 @@ def trigger_backup(
 ):
     client_ip = request.client.host if request.client else "127.0.0.1"
     try:
-        return BackupService.run_backup(
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repo:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository {repo_id} not found")
+
+        return BackupService.execute_single_backup(
             db,
-            repo_id=repo_id,
-            backup_type=req.backup_type,
+            repo=repo,
+            backup_type=req.backup_type or "hotcopy_full",
+            destination_path=None,
             force=req.force,
+            skip_if_unchanged=False if req.force else True,
+            encryption_enabled=bool(req.passphrase),
             passphrase=req.passphrase,
             actor="admin",
             client_ip=client_ip
@@ -89,6 +156,28 @@ def trigger_backup(
 @router.get("/backup/archives", summary="List backup archives")
 def list_backup_archives(repo_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     return BackupService.list_archives(db, repo_id)
+
+@router.get("/backup/archives/{archive_id}/download", summary="Download backup archive")
+def download_backup_archive(archive_id: int, db: Session = Depends(get_db)):
+    rec = db.query(BackupArchiveRecord).filter(BackupArchiveRecord.id == archive_id).first()
+    if not rec:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup archive not found.")
+
+    p = Path(rec.archive_path)
+    if not p.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Archive file is missing from disk.")
+
+    media_type = "application/gzip" if p.name.endswith(".gz") else "application/octet-stream"
+    return FileResponse(path=str(p), filename=rec.archive_filename, media_type=media_type)
+
+@router.delete("/backup/archives/{archive_id}", summary="Delete backup archive")
+def delete_backup_archive(archive_id: int, db: Session = Depends(get_db)):
+    try:
+        return BackupService.delete_archive(db, archive_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/backup/verify/{archive_id}", response_model=BackupVerifyResponse, summary="Automated Sandbox Verification")
 def verify_backup_archive(
@@ -119,6 +208,55 @@ def restore_backup_archive(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# --- Repository Maintenance & Optimization Tools ---
+
+@router.post("/maintenance/pack/{repo_id}", summary="Execute FSFS shard packing")
+def pack_repository(repo_id: int, db: Session = Depends(get_db)):
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found.")
+    try:
+        return MaintenanceService.pack_repository(repo.fs_path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/maintenance/clean-txns/{repo_id}", summary="Purge dead transactions")
+def clean_transactions(repo_id: int, db: Session = Depends(get_db)):
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found.")
+    try:
+        return MaintenanceService.clean_transactions(repo.fs_path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/maintenance/verify/{repo_id}", summary="Live svnadmin verify inspection")
+def verify_repository_health(
+    repo_id: int,
+    req: VerifyRepoRequest = VerifyRepoRequest(),
+    db: Session = Depends(get_db)
+):
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found.")
+    try:
+        return MaintenanceService.verify_repository(repo.fs_path, req.start_revision, req.end_revision)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/maintenance/storage-stats", summary="Get detailed storage breakdown across all repositories")
+def get_storage_stats(db: Session = Depends(get_db)):
+    try:
+        return MaintenanceService.get_storage_breakdown(db)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
