@@ -19,6 +19,7 @@ import {
   LucideIcon,
   Key,
   Bell,
+  AlertTriangle,
   CheckCheck,
   ExternalLink,
   Calendar,
@@ -524,88 +525,118 @@ export const Navbar: React.FC<NavbarProps> = ({
                           No repository updates recorded yet.
                         </div>
                       ) : (
-                        recentNotifications.map((n) => (
-                          <div
-                            key={n.id}
-                            onClick={() => handleNotificationClick(n)}
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '0.2rem',
-                              padding: '0.5rem 0.6rem',
-                              borderRadius: '6px',
-                              backgroundColor: !n.is_read
-                                ? 'rgba(59, 130, 246, 0.1)'
-                                : 'rgba(255, 255, 255, 0.02)',
-                              borderLeft: !n.is_read ? '3px solid #3b82f6' : '3px solid transparent',
-                              cursor: 'pointer',
-                              transition: 'background-color 0.15s ease'
-                            }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.backgroundColor = !n.is_read
-                                ? 'rgba(59, 130, 246, 0.16)'
-                                : 'rgba(255, 255, 255, 0.05)')
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.backgroundColor = !n.is_read
-                                ? 'rgba(59, 130, 246, 0.1)'
-                                : 'rgba(255, 255, 255, 0.02)')
-                            }
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <span style={{ fontWeight: 600, fontSize: '0.78rem', color: '#60a5fa' }}>
-                                  {n.repository_name}
-                                </span>
-                                {n.revision !== null && (
+                        recentNotifications.map((n) => {
+                          const isFailure =
+                            n.action_type?.toLowerCase().includes('fail') ||
+                            n.message?.toLowerCase().includes('status: failed') ||
+                            n.summary?.toLowerCase().includes('failed');
+
+                          return (
+                            <div
+                              key={n.id}
+                              onClick={() => handleNotificationClick(n)}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.2rem',
+                                padding: '0.5rem 0.6rem',
+                                borderRadius: '6px',
+                                backgroundColor: isFailure
+                                  ? !n.is_read
+                                    ? 'rgba(239, 68, 68, 0.12)'
+                                    : 'rgba(239, 68, 68, 0.04)'
+                                  : !n.is_read
+                                  ? 'rgba(59, 130, 246, 0.1)'
+                                  : 'rgba(255, 255, 255, 0.02)',
+                                borderLeft: isFailure
+                                  ? !n.is_read
+                                    ? '3px solid #ef4444'
+                                    : '3px solid rgba(239, 68, 68, 0.4)'
+                                  : !n.is_read
+                                  ? '3px solid #3b82f6'
+                                  : '3px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.15s ease'
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor = isFailure
+                                  ? 'rgba(239, 68, 68, 0.18)'
+                                  : !n.is_read
+                                  ? 'rgba(59, 130, 246, 0.16)'
+                                  : 'rgba(255, 255, 255, 0.05)')
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor = isFailure
+                                  ? !n.is_read
+                                    ? 'rgba(239, 68, 68, 0.12)'
+                                    : 'rgba(239, 68, 68, 0.04)'
+                                  : !n.is_read
+                                  ? 'rgba(59, 130, 246, 0.1)'
+                                  : 'rgba(255, 255, 255, 0.02)')
+                              }
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  {isFailure && <AlertTriangle size={12} color="#f87171" />}
                                   <span
                                     style={{
-                                      fontSize: '0.72rem',
-                                      fontFamily: 'var(--font-mono)',
-                                      color: '#38bdf8'
+                                      fontWeight: 600,
+                                      fontSize: '0.78rem',
+                                      color: isFailure ? '#f87171' : '#60a5fa'
                                     }}
                                   >
-                                    r{n.revision}
+                                    {n.repository_name}
                                   </span>
-                                )}
+                                  {n.revision !== null && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.72rem',
+                                        fontFamily: 'var(--font-mono)',
+                                        color: '#38bdf8'
+                                      }}
+                                    >
+                                      r{n.revision}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                                    {n.created_at
+                                      ? new Date(n.created_at).toLocaleTimeString([], {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })
+                                      : ''}
+                                  </span>
+                                  {!n.is_read && (
+                                    <span
+                                      style={{
+                                        width: '6px',
+                                        height: '6px',
+                                        borderRadius: '50%',
+                                        backgroundColor: isFailure ? '#ef4444' : '#3b82f6'
+                                      }}
+                                    ></span>
+                                  )}
+                                </div>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                                  {n.created_at
-                                    ? new Date(n.created_at).toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })
-                                    : ''}
-                                </span>
-                                {!n.is_read && (
-                                  <span
-                                    style={{
-                                      width: '6px',
-                                      height: '6px',
-                                      borderRadius: '50%',
-                                      backgroundColor: '#3b82f6'
-                                    }}
-                                  ></span>
-                                )}
+                              <div
+                                style={{
+                                  fontSize: '0.75rem',
+                                  color: isFailure ? '#fca5a5' : 'var(--text-muted)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {n.message ? n.message.split('\n')[0] : n.summary || 'Update committed'}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                                by {n.author || 'system'}
                               </div>
                             </div>
-                            <div
-                              style={{
-                                fontSize: '0.75rem',
-                                color: 'var(--text-muted)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {n.message ? n.message.split('\n')[0] : n.summary || 'Update committed'}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                              by {n.author || 'system'}
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
 

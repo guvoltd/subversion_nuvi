@@ -21,6 +21,7 @@ import {
   FolderPlus,
   GitFork,
   AlertTriangle,
+  AlertCircle,
   FolderTree,
   Search,
   ChevronDown,
@@ -109,18 +110,24 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
   const [notifRepoFilter, setNotifRepoFilter] = useState<number | 'all'>('all');
   const [notifSearch, setNotifSearch] = useState('');
   const [notifUnreadCount, setNotifUnreadCount] = useState<number>(0);
+  const [notifTotalCount, setNotifTotalCount] = useState<number>(0);
+  const [notifReadCount, setNotifReadCount] = useState<number>(0);
   const [expandedNotifId, setExpandedNotifId] = useState<number | null>(null);
+  const [copiedNotifId, setCopiedNotifId] = useState<number | null>(null);
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<number>>(new Set());
 
   const loadNotifications = React.useCallback(async (silent: boolean = false) => {
     if (!silent) setNotifLoading(true);
     try {
       const res = await api.getNotifications({
         repository_id: notifRepoFilter !== 'all' ? notifRepoFilter : undefined,
-        limit: 100,
+        limit: 250,
         auto_sync: true
       });
       setNotifications(res.notifications || []);
+      setNotifTotalCount(res.total);
       setNotifUnreadCount(res.unread_count);
+      setNotifReadCount(res.read_count ?? Math.max(0, res.total - res.unread_count));
     } catch (err: any) {
       if (!silent) {
         setMessage({ type: 'error', text: err.message || 'Failed to load notifications' });
@@ -207,24 +214,39 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
     try {
       const targetRepo = notifRepoFilter !== 'all' ? notifRepoFilter : undefined;
       const res = await api.clearReadNotifications(targetRepo);
-      setNotifications((prev) => prev.filter((n) => !n.is_read));
       setMessage({ type: 'success', text: res.message || 'Cleared read notifications.' });
       window.dispatchEvent(new Event('nuvi_notifications_updated'));
+      await loadNotifications(true);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to clear read notifications' });
+    }
+  };
+
+  const handleClearAllNotifs = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL notifications? All current events will be permanently removed and cleared.')) {
+      return;
+    }
+    try {
+      const targetRepo = notifRepoFilter !== 'all' ? notifRepoFilter : undefined;
+      const res = await api.clearAllNotifications(targetRepo);
+      setNotifications([]);
+      setNotifTotalCount(0);
+      setNotifUnreadCount(0);
+      setNotifReadCount(0);
+      setMessage({ type: 'success', text: res.message || 'Cleared all notifications.' });
+      window.dispatchEvent(new Event('nuvi_notifications_updated'));
+      await loadNotifications(true);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to clear all notifications' });
     }
   };
 
   const handleDeleteNotif = async (id: number) => {
     try {
       await api.deleteNotification(id);
-      const target = notifications.find((n) => n.id === id);
-      if (target && !target.is_read) {
-        setNotifUnreadCount((prev) => Math.max(0, prev - 1));
-      }
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
       setMessage({ type: 'success', text: 'Notification deleted.' });
       window.dispatchEvent(new Event('nuvi_notifications_updated'));
+      await loadNotifications(true);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Failed to delete notification' });
     }
@@ -338,8 +360,15 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
     return revMatch || repoMatch || authorMatch || msgMatch || summaryMatch || pathMatch;
   });
 
-  const unreadNotifsCount = notifications.filter((n) => !n.is_read).length;
-  const readNotifsCount = notifications.filter((n) => n.is_read).length;
+  const unreadNotifsCount = notifSearch.trim()
+    ? filteredNotifications.filter((n) => !n.is_read).length
+    : notifUnreadCount;
+  const readNotifsCount = notifSearch.trim()
+    ? filteredNotifications.filter((n) => n.is_read).length
+    : notifReadCount;
+  const totalNotifsCount = notifSearch.trim()
+    ? filteredNotifications.length
+    : notifTotalCount;
 
   const handleOpenFile = async (entry: any) => {
     setViewingFile(entry);
@@ -646,10 +675,22 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={handleClearReadNotifs}
+              disabled={notifReadCount === 0}
               title="Delete notifications marked as read"
             >
               <Trash2 size={13} />
-              Clear Read
+              Clear Read{notifReadCount > 0 ? ` (${notifReadCount})` : ''}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleClearAllNotifs}
+              disabled={notifTotalCount === 0}
+              style={{ color: notifTotalCount > 0 ? '#f87171' : undefined }}
+              title="Permanently remove all notifications and reset history markers"
+            >
+              <Trash2 size={13} />
+              Clear All{notifTotalCount > 0 ? ` (${notifTotalCount})` : ''}
             </button>
           </div>
         )}
@@ -1036,7 +1077,7 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
               className={`btn btn-sm ${notifFilter === 'all' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ padding: '0.25rem 0.75rem', fontSize: '0.8rem', borderRadius: '4px' }}
             >
-              All ({notifications.length})
+              All ({totalNotifsCount})
             </button>
             <button
               type="button"
@@ -1112,6 +1153,9 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
           {filteredNotifications.map((notif) => {
             const paths = notif.changed_paths || [];
             const firstChangedPath = paths.length > 0 ? paths[0].path || '/' : '/';
+            const isFailure = notif.action_type?.toLowerCase().includes('fail') ||
+                              notif.message?.toLowerCase().includes('status: failed') ||
+                              notif.summary?.toLowerCase().includes('failed');
 
             return (
               <div
@@ -1122,8 +1166,12 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
                   backgroundColor: 'var(--bg-secondary)',
                   borderRadius: '10px',
                   border: '1px solid var(--border-color)',
-                  borderLeft: !notif.is_read ? '4px solid #3b82f6' : '4px solid var(--border-color)',
-                  boxShadow: !notif.is_read ? '0 4px 14px rgba(59, 130, 246, 0.08)' : 'none',
+                  borderLeft: isFailure
+                    ? (!notif.is_read ? '4px solid #ef4444' : '4px solid rgba(239, 68, 68, 0.45)')
+                    : (!notif.is_read ? '4px solid #3b82f6' : '4px solid var(--border-color)'),
+                  boxShadow: isFailure
+                    ? (!notif.is_read ? '0 4px 14px rgba(239, 68, 68, 0.12)' : 'none')
+                    : (!notif.is_read ? '0 4px 14px rgba(59, 130, 246, 0.08)' : 'none'),
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '0.75rem',
@@ -1188,8 +1236,30 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
                       }}
                     >
                       <Folder size={12} color="#38bdf8" />
-                      {notif.repository_name}
+                      {repositories.find((r) => r.id === notif.repository_id)?.name || notif.repository_name}
                     </span>
+
+                    {/* Failure Alert Badge */}
+                    {isFailure && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          padding: '0.15rem 0.55rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.04em'
+                        }}
+                      >
+                        <AlertTriangle size={11} color="#f87171" />
+                        FAILURE REPORT
+                      </span>
+                    )}
 
                     {/* Author */}
                     <span
@@ -1268,6 +1338,31 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
 
                   {/* Card Action Buttons */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    {isFailure && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          const logText = notif.message ? notif.message.trim() : notif.summary || '';
+                          navigator.clipboard.writeText(logText);
+                          setCopiedNotifId(notif.id);
+                          setTimeout(() => setCopiedNotifId(null), 2500);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontSize: '0.78rem',
+                          color: copiedNotifId === notif.id ? '#10b981' : '#f87171',
+                          borderColor: copiedNotifId === notif.id ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.3)'
+                        }}
+                        title="Copy diagnostic error log to clipboard"
+                      >
+                        {copiedNotifId === notif.id ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+                        {copiedNotifId === notif.id ? 'Copied Log' : 'Copy Error Log'}
+                      </button>
+                    )}
+
                     {!notif.is_read ? (
                       <button
                         type="button"
@@ -1316,11 +1411,11 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
                   </div>
                 </div>
 
-                {/* Commit Message Box */}
+                {/* Message / Diagnostic Output Box */}
                 <div
                   style={{
-                    backgroundColor: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-color)',
+                    backgroundColor: isFailure ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-tertiary)',
+                    border: isFailure ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-color)',
                     borderRadius: '6px',
                     padding: '0.75rem 1rem',
                     fontFamily: 'var(--font-mono)',
@@ -1331,7 +1426,101 @@ export const RepositoryBrowserTab: React.FC<RepositoryBrowserTabProps> = ({ repo
                     wordBreak: 'break-word'
                   }}
                 >
-                  {notif.message ? notif.message.trim() : notif.summary || 'Commit update recorded.'}
+                  {isFailure && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: '#f87171',
+                        marginBottom: '0.55rem',
+                        paddingBottom: '0.4rem',
+                        borderBottom: '1px solid rgba(239, 68, 68, 0.2)'
+                      }}
+                    >
+                      <AlertTriangle size={13} color="#f87171" />
+                      <span>DIAGNOSTIC FAILURE LOGS & SYSTEM DETAILS</span>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const rawMsg = notif.message ? notif.message.trim() : notif.summary || 'Commit update recorded.';
+                    const lines = rawMsg.split('\n');
+                    const isExpanded = expandedLogIds.has(notif.id);
+                    const hasManyLines = lines.length > 12;
+
+                    if (isFailure && hasManyLines && !isExpanded) {
+                      return (
+                        <div>
+                          <div>{lines.slice(0, 10).join('\n')}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedLogIds((prev) => {
+                                const next = new Set(prev);
+                                next.add(notif.id);
+                                return next;
+                              });
+                            }}
+                            style={{
+                              marginTop: '0.65rem',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              borderRadius: '4px',
+                              color: '#fca5a5',
+                              padding: '0.25rem 0.65rem',
+                              fontSize: '0.76rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontWeight: 600
+                            }}
+                          >
+                            <ChevronDown size={13} />
+                            Show full diagnostic logs ({lines.length} lines)
+                          </button>
+                        </div>
+                      );
+                    } else if (isFailure && hasManyLines && isExpanded) {
+                      return (
+                        <div>
+                          <div>{rawMsg}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedLogIds((prev) => {
+                                const next = new Set(prev);
+                                next.delete(notif.id);
+                                return next;
+                              });
+                            }}
+                            style={{
+                              marginTop: '0.65rem',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              color: 'var(--text-muted)',
+                              padding: '0.25rem 0.65rem',
+                              fontSize: '0.76rem',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontWeight: 500
+                            }}
+                          >
+                            <ChevronUp size={13} />
+                            Collapse failure logs
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return rawMsg;
+                  })()}
                 </div>
 
                 {/* Changed Paths List (Detailed Log Viewer view) */}

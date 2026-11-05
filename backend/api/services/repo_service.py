@@ -46,7 +46,7 @@ class RepositoryService:
     def _resolve_repo_path(db: Session, r: Repository) -> Path:
         """Resolve and auto-heal repository filesystem path if it has moved."""
         path = Path(r.fs_path)
-        if path.exists():
+        if path.exists() and path.name == r.name:
             return path
 
         candidates = [
@@ -55,13 +55,17 @@ class RepositoryService:
             config.DATA_DIR / "repositorys" / r.name,
         ]
         for cand in candidates:
-            if cand.exists():
+            if cand.exists() and cand.name == r.name:
                 r.fs_path = str(cand)
                 try:
                     db.commit()
                 except Exception:
                     db.rollback()
                 return cand
+
+        if path.exists():
+            return path
+
         return path
 
     @staticmethod
@@ -606,7 +610,7 @@ class RepositoryService:
 
         return ServerStatusResponse(
             server_name=config.SERVER_NAME,
-            version="1.16.13 (Subversion 1.16.13)",
+            version="1.16.16 (Subversion 1.16.16)",
             uptime_seconds=time.time() - START_TIME,
             uptime_formatted=uptime_str,
             repositories_count=len(repos),

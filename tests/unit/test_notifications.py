@@ -36,9 +36,10 @@ def test_notification_creation_and_lifecycle():
         assert notif.is_read is False
 
         # Get notifications
-        items, total, unread = NotificationService.get_notifications(db)
+        items, total, unread, read = NotificationService.get_notifications(db)
         assert total >= 1
         assert unread >= 1
+        assert read >= 0
         target = next((item for item in items if item["id"] == notif.id), None)
         assert target is not None
         assert target["is_read"] is False
@@ -123,6 +124,11 @@ def test_notification_api_endpoints():
     res_clear = client.delete("/api/v1/notifications/clear-read", headers=headers)
     assert res_clear.status_code == 200
     assert res_clear.json()["status"] == "success"
+
+    # Clear all notifications
+    res_clear_all = client.delete("/api/v1/notifications/clear-all", headers=headers)
+    assert res_clear_all.status_code == 200
+    assert res_clear_all.json()["status"] == "success"
 
 def test_sync_repository_notifications():
     uid = uuid.uuid4().hex[:6]

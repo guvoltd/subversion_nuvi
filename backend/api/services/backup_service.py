@@ -11,6 +11,7 @@ import zipfile
 import subprocess
 import tarfile
 import tempfile
+import traceback
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -33,6 +34,7 @@ from backend.api.models.dto import (
     BackupScheduleJobResponse
 )
 from backend.api.services.svn_native import svn_engine, SubversionNativeError
+from backend.api.services.repo_service import RepositoryService
 from backend.api.services.audit_service import AuditService
 
 
@@ -361,7 +363,13 @@ class BackupService:
         client_ip: str = "127.0.0.1"
     ) -> Dict[str, Any]:
         """Executes a hotcopy or dump backup for a specific repository."""
-        info = svn_engine.get_repository_info(repo.fs_path)
+        # Resolve real filesystem path
+        repo_path = RepositoryService._resolve_repo_path(db, repo) if repo else None
+        if not repo_path or not os.path.exists(repo_path):
+            raise FileNotFoundError(f"Repository filesystem path '{repo_path or (repo.fs_path if repo else 'unknown')}' does not exist on disk.")
+
+        repo_fs_path = str(repo_path)
+        info = svn_engine.get_repository_info(repo_fs_path)
         current_rev = info.get("latest_revision", 0)
 
         # 1. Check last backup for this repo
@@ -402,11 +410,11 @@ class BackupService:
             if is_incremental and last_backup:
                 dump_filename = f"{repo.name}_rev{rev_from+1}-{current_rev}_{now_str}.dump.gz"
                 dump_path = dest_dir / dump_filename
-                cmd = ["svnadmin", "dump", repo.fs_path, "-r", f"{rev_from+1}:{current_rev}", "--incremental"]
+                cmd = ["svnadmin", "dump", repo_fs_path, "-r", f"{rev_from+1}:{current_rev}", "--incremental"]
             else:
                 dump_filename = f"{repo.name}_rev0-{current_rev}_{now_str}.dump.gz"
                 dump_path = dest_dir / dump_filename
-                cmd = ["svnadmin", "dump", repo.fs_path]
+                cmd = ["svnadmin", "dump", repo_fs_path]
 
             dump_proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             with gzip.open(dump_path, "wb") as gz_out:
@@ -415,15 +423,15 @@ class BackupService:
             if dump_proc.returncode != 0:
                 if dump_path.exists():
                     dump_path.unlink()
-                err_text = dump_proc.stderr.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"svnadmin dump failed: {err_text}")
+                err_text = dump_proc.stderr.read().decode("utf-8", errors="replace").strip()
+                raise RuntimeError(f"svnadmin dump failed (exit code {dump_proc.returncode}):\n{err_text}")
 
             final_filename = dump_filename
             final_path = dump_path
         else:
             # Hotcopy (Full or Incremental)
             temp_hotcopy_dir = dest_dir / f"hotcopy_{repo.name}_{now_str}"
-            cmd = ["svnadmin", "hotcopy", repo.fs_path, str(temp_hotcopy_dir)]
+            cmd = ["svnadmin", "hotcopy", repo_fs_path, str(temp_hotcopy_dir)]
             if is_incremental and last_backup:
                 cmd.append("--incremental")
 
@@ -431,7 +439,8 @@ class BackupService:
             if proc.returncode != 0:
                 if temp_hotcopy_dir.exists():
                     shutil.rmtree(temp_hotcopy_dir, ignore_errors=True)
-                raise RuntimeError(f"svnadmin hotcopy failed: {proc.stderr}")
+                err_msg = proc.stderr.strip() or proc.stdout.strip() or f"Process exited with code {proc.returncode}"
+                raise RuntimeError(f"svnadmin hotcopy failed (exit code {proc.returncode}):\n{err_msg}")
 
             tar_filename = f"{repo.name}_rev{current_rev}_{now_str}.tar.gz"
             tar_path = dest_dir / tar_filename
@@ -645,41 +654,71 @@ class BackupService:
         try:
             results = []
             if job.backup_type == "authz_config":
-                res = BackupService.execute_authz_config_backup(
-                    db,
-                    destination_path=job.destination_path,
-                    job_id=job.id,
-                    encryption_enabled=job.encryption_enabled,
-                    passphrase=job.encryption_passphrase,
-                    retention_count=job.retention_count,
-                    actor=actor,
-                    client_ip=client_ip
-                )
-                results.append(res)
+                try:
+                    res = BackupService.execute_authz_config_backup(
+                        db,
+                        destination_path=job.destination_path,
+                        job_id=job.id,
+                        encryption_enabled=job.encryption_enabled,
+                        passphrase=job.encryption_passphrase,
+                        retention_count=job.retention_count,
+                        actor=actor,
+                        client_ip=client_ip
+                    )
+                    results.append(res)
+                except Exception as e:
+                    results.append({
+                        "status": "failed",
+                        "repository_id": None,
+                        "repository_name": "authz_config",
+                        "error": str(e),
+                        "details": traceback.format_exc()
+                    })
             elif job.repository_id:
                 # Specific repository
                 repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
                 if not repo:
-                    raise ValueError(f"Repository ID {job.repository_id} not found.")
-                res = BackupService.execute_single_backup(
-                    db,
-                    repo=repo,
-                    backup_type=job.backup_type,
-                    destination_path=job.destination_path,
-                    force=force,
-                    skip_if_unchanged=job.skip_if_unchanged,
-                    encryption_enabled=job.encryption_enabled,
-                    passphrase=job.encryption_passphrase,
-                    job_id=job.id,
-                    auto_verify=job.auto_verify,
-                    retention_count=job.retention_count,
-                    actor=actor,
-                    client_ip=client_ip
-                )
-                results.append(res)
+                    results.append({
+                        "status": "failed",
+                        "repository_id": job.repository_id,
+                        "repository_name": f"Repo #{job.repository_id}",
+                        "error": f"Repository ID {job.repository_id} not found in database.",
+                        "details": f"Target repository with ID {job.repository_id} is missing from the database."
+                    })
+                else:
+                    try:
+                        res = BackupService.execute_single_backup(
+                            db,
+                            repo=repo,
+                            backup_type=job.backup_type,
+                            destination_path=job.destination_path,
+                            force=force,
+                            skip_if_unchanged=job.skip_if_unchanged,
+                            encryption_enabled=job.encryption_enabled,
+                            passphrase=job.encryption_passphrase,
+                            job_id=job.id,
+                            auto_verify=job.auto_verify,
+                            retention_count=job.retention_count,
+                            actor=actor,
+                            client_ip=client_ip
+                        )
+                        results.append(res)
+                    except Exception as e:
+                        results.append({
+                            "status": "failed",
+                            "repository_id": repo.id,
+                            "repository_name": repo.name,
+                            "error": str(e),
+                            "details": traceback.format_exc()
+                        })
             else:
                 # All active repositories
                 repos = db.query(Repository).all()
+                if not repos:
+                    results.append({
+                        "status": "skipped",
+                        "reason": "No active repositories found in database to backup."
+                    })
                 for repo in repos:
                     try:
                         res = BackupService.execute_single_backup(
@@ -703,7 +742,8 @@ class BackupService:
                             "status": "failed",
                             "repository_id": repo.id,
                             "repository_name": repo.name,
-                            "error": str(e)
+                            "error": str(e),
+                            "details": traceback.format_exc()
                         })
 
             # Check status
@@ -711,21 +751,102 @@ class BackupService:
             success_count = sum(1 for r in results if r.get("status") == "success")
             skipped_count = sum(1 for r in results if r.get("status") == "skipped")
 
+            now = datetime.now(timezone.utc)
+
             if failed_count > 0:
                 final_status = "failed" if success_count == 0 else "partial"
                 summary_msg = f"{success_count} succeeded, {skipped_count} skipped, {failed_count} failed."
+
+                # Group failures by root cause / primary error string
+                grouped_errors: Dict[str, List[str]] = {}
+                for r in results:
+                    if r.get("status") == "failed":
+                        err_str = (r.get("error") or "Unknown execution error").strip()
+                        r_name = r.get("repository_name") or f"Repo #{r.get('repository_id', '?')}"
+                        grouped_errors.setdefault(err_str, []).append(r_name)
+
+                # Determine primary failure snippet for summary line
+                first_err = list(grouped_errors.keys())[0] if grouped_errors else "Execution failed"
+                first_err_short = first_err.splitlines()[0].strip()
+                if len(first_err_short) > 120:
+                    first_err_short = first_err_short[:117] + "..."
+
+                # Construct rich multi-section notification message
+                msg_parts = [
+                    f"Scheduled execution of '{job.name}' finished with status: {final_status.upper()}.",
+                    f"{summary_msg}",
+                    "",
+                    "=== FAILURE ROOT CAUSE & DIAGNOSTICS ==="
+                ]
+                for err_pattern, repo_list in grouped_errors.items():
+                    msg_parts.append(f"[{len(repo_list)} target(s) affected]")
+                    msg_parts.append(f"Error: {err_pattern}")
+                    names_str = ", ".join(repo_list[:12])
+                    if len(repo_list) > 12:
+                        names_str += f" (and {len(repo_list) - 12} more)"
+                    msg_parts.append(f"Affected targets: {names_str}")
+                    msg_parts.append("")
+
+                msg_parts.append("=== PER-REPOSITORY FAILURE BREAKDOWN ===")
+                for r in results:
+                    if r.get("status") == "failed":
+                        r_name = r.get("repository_name") or f"Repo #{r.get('repository_id', '?')}"
+                        r_err = (r.get("error") or "").strip()
+                        msg_parts.append(f"• Target '{r_name}':")
+                        for line in r_err.splitlines():
+                            msg_parts.append(f"    {line}")
+
+                full_notif_message = "\n".join(msg_parts)
+                job_last_message = f"{summary_msg} Error: {first_err_short}"[:500]
+                notif_summary = f"Backup Job '{job.name}' {final_status.upper()}: {summary_msg} - {first_err_short}"[:500]
+
+                # Audit log failure
+                try:
+                    AuditService.log_event(
+                        db,
+                        actor=actor,
+                        action_category="operational",
+                        action_name="backup_job_failed" if final_status == "failed" else "backup_job_partial",
+                        target_type="backup_schedule_job",
+                        target_id=str(job.id),
+                        details={
+                            "job_name": job.name,
+                            "final_status": final_status,
+                            "succeeded": success_count,
+                            "skipped": skipped_count,
+                            "failed": failed_count,
+                            "primary_error": first_err_short,
+                            "failures": [
+                                {
+                                    "repository_id": r.get("repository_id"),
+                                    "repository_name": r.get("repository_name"),
+                                    "error": r.get("error")
+                                }
+                                for r in results if r.get("status") == "failed"
+                            ][:50]
+                        },
+                        client_ip=client_ip
+                    )
+                except Exception:
+                    pass
+
             elif success_count > 0:
                 final_status = "success"
                 summary_msg = f"Completed successfully: {success_count} archive(s) created."
+                full_notif_message = f"Scheduled execution of '{job.name}' finished with status: SUCCESS.\n{summary_msg}"
+                job_last_message = summary_msg
+                notif_summary = f"Backup Job '{job.name}': {summary_msg}"
             else:
                 final_status = "skipped"
                 summary_msg = f"All {skipped_count} repository targets skipped (unchanged)."
+                full_notif_message = f"Scheduled execution of '{job.name}' finished with status: SKIPPED.\n{summary_msg}"
+                job_last_message = summary_msg
+                notif_summary = f"Backup Job '{job.name}': {summary_msg}"
 
             # Update job telemetry
-            now = datetime.now(timezone.utc)
             job.last_run_at = now
             job.last_run_status = final_status
-            job.last_run_message = summary_msg
+            job.last_run_message = job_last_message
             job.next_run_at = BackupService.calculate_next_run(
                 frequency=job.schedule_frequency,
                 time_str=job.schedule_time,
@@ -742,8 +863,8 @@ class BackupService:
                 revision=None,
                 author=actor,
                 action_type="backup_completed" if final_status in ("success", "skipped") else "backup_failed",
-                summary=f"Backup Job '{job.name}': {summary_msg}",
-                message=f"Scheduled execution of '{job.name}' finished with status: {final_status.upper()}.\n{summary_msg}",
+                summary=notif_summary,
+                message=full_notif_message,
                 is_read=False,
                 created_at=now
             )
@@ -760,9 +881,11 @@ class BackupService:
 
         except Exception as e:
             now = datetime.now(timezone.utc)
+            tb = traceback.format_exc()
+            err_str = str(e)
             job.last_run_at = now
             job.last_run_status = "failed"
-            job.last_run_message = str(e)
+            job.last_run_message = f"Critical Failure: {err_str}"[:500]
             job.next_run_at = BackupService.calculate_next_run(
                 frequency=job.schedule_frequency,
                 time_str=job.schedule_time,
@@ -772,18 +895,37 @@ class BackupService:
             )
             db.commit()
 
+            notif_msg = (
+                f"Scheduled execution of '{job.name}' encountered a critical system error:\n"
+                f"Error: {err_str}\n\n"
+                f"=== Diagnostic Traceback ===\n"
+                f"{tb}"
+            )
             notif = Notification(
                 repository_id=job.repository_id,
                 repository_name=job.name,
                 revision=None,
                 author=actor,
                 action_type="backup_failed",
-                summary=f"Backup Job '{job.name}' Failed",
-                message=f"Error executing backup schedule job '{job.name}': {e}",
+                summary=f"Backup Job '{job.name}' FAILED: {err_str}"[:500],
+                message=notif_msg,
                 is_read=False,
                 created_at=now
             )
             db.add(notif)
+            try:
+                AuditService.log_event(
+                    db,
+                    actor=actor,
+                    action_category="operational",
+                    action_name="backup_job_critical_failure",
+                    target_type="backup_schedule_job",
+                    target_id=str(job.id),
+                    details={"job_name": job.name, "error": err_str, "traceback": tb},
+                    client_ip=client_ip
+                )
+            except Exception:
+                pass
             db.commit()
 
             raise
@@ -979,9 +1121,35 @@ class BackupService:
 
         except Exception as e:
             rec.verification_status = "failed"
-            rec.verification_log = f"Verification failed: {e}"
+            rec.verification_log = f"Verification failed: {e}\n{traceback.format_exc()}"
             rec.verified_at = datetime.now(timezone.utc)
             db.commit()
+            try:
+                notif = Notification(
+                    repository_id=rec.repository_id,
+                    repository_name=rec.archive_filename,
+                    revision=rec.revision_to,
+                    author="system",
+                    action_type="verification_failed",
+                    summary=f"Backup Verification FAILED: Archive #{rec.id} ({rec.archive_filename})"[:500],
+                    message=f"Backup sandbox integrity verification failed for archive #{rec.id} ({rec.archive_filename}):\n\n{rec.verification_log}",
+                    is_read=False,
+                    created_at=datetime.now(timezone.utc)
+                )
+                db.add(notif)
+                AuditService.log_event(
+                    db,
+                    actor="system",
+                    action_category="operational",
+                    action_name="backup_verification_failed",
+                    target_type="backup_archive",
+                    target_id=str(rec.id),
+                    details={"archive_filename": rec.archive_filename, "error": str(e)},
+                    client_ip="127.0.0.1"
+                )
+                db.commit()
+            except Exception:
+                pass
             return BackupVerifyResponse(
                 archive_id=rec.id,
                 status="failed",

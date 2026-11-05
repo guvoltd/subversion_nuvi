@@ -3,7 +3,7 @@
     RootModule = 'SvnAdmin.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.16.13'
+    ModuleVersion = '1.16.16'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core', 'Desktop')

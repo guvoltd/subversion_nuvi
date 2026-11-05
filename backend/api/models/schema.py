@@ -306,8 +306,8 @@ class HookConfig(Base):
     is_enabled = Column(Boolean, default=True, nullable=False)
     # pre-commit rules
     check_commit_message = Column(Boolean, default=False, nullable=False)
-    commit_message_pattern = Column(String(255), default="^.{10,}", nullable=True)
-    commit_message_error_msg = Column(String(255), default="Commit message must be at least 10 characters.", nullable=True)
+    commit_message_pattern = Column(String(255), default="^.{50,}", nullable=True)
+    commit_message_error_msg = Column(String(255), default="Commit message must be at least 50 characters.", nullable=True)
     check_pathnames = Column(Boolean, default=False, nullable=False)
     disallow_spaces = Column(Boolean, default=False, nullable=False)
     disallow_special_chars = Column(Boolean, default=True, nullable=False)

@@ -551,12 +551,12 @@ export const api = {
   },
 
   // Pre-Packaged Hook Engine (Phase 5)
-  async getHookConfig(repoId: number, hookName: string): Promise<any> {
+  async getHookConfig(repoId: number | string, hookName: string): Promise<any> {
     const res = await fetch(`${API_BASE}/operations/hooks/${repoId}/${hookName}`);
     return handleResponse<any>(res);
   },
 
-  async updateHookConfig(repoId: number, hookName: string, payload: any): Promise<any> {
+  async updateHookConfig(repoId: number | string, hookName: string, payload: any): Promise<any> {
     const res = await fetch(`${API_BASE}/operations/hooks/${repoId}/${hookName}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -864,6 +864,12 @@ export const api = {
 
   async clearReadNotifications(repositoryId?: number): Promise<{ status: string; deleted_count: number; message: string }> {
     const url = repositoryId ? `${API_BASE}/notifications/clear-read?repository_id=${repositoryId}` : `${API_BASE}/notifications/clear-read`;
+    const res = await fetch(url, { method: 'DELETE' });
+    return handleResponse<any>(res);
+  },
+
+  async clearAllNotifications(repositoryId?: number): Promise<{ status: string; deleted_count: number; message: string }> {
+    const url = repositoryId ? `${API_BASE}/notifications/clear-all?repository_id=${repositoryId}` : `${API_BASE}/notifications/clear-all`;
     const res = await fetch(url, { method: 'DELETE' });
     return handleResponse<any>(res);
   }

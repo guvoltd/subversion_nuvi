@@ -37,6 +37,14 @@ async def _background_scheduler():
 async def lifespan(app: FastAPI):
     # Startup: ensure tables exist
     init_db()
+    try:
+        from backend.api.db import SessionLocal
+        from backend.api.services.hook_service import HookService
+        with SessionLocal() as db:
+            HookService.heal_installed_hooks(db)
+    except Exception as e:
+        logger.warning(f"Hook healing on startup skipped: {e}")
+
     task = asyncio.create_task(_background_scheduler())
     yield
     # Shutdown logic
@@ -49,7 +57,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Subversion Nuvi API",
     description="Enterprise Management & Service API for Apache Subversion",
-    version="1.16.13",
+    version="1.16.16",
     lifespan=lifespan,
     docs_url=f"{config.API_URL_PREFIX}/docs",
     openapi_url=f"{config.API_URL_PREFIX}/openapi.json",

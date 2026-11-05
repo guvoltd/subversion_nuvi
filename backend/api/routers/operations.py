@@ -7,6 +7,8 @@ Dead Transaction Cleaning, Storage Profiling, Hook Engine, and Multi-Site Replic
 
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from datetime import datetime, timezone
+import traceback
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -27,11 +29,12 @@ from backend.api.models.dto import (
     ReplicationNodeCreateRequest,
     ReplicationNodeResponse,
 )
-from backend.api.models.schema import Repository, BackupArchiveRecord
+from backend.api.models.schema import Repository, BackupArchiveRecord, HookConfig, Notification
 from backend.api.services.backup_service import BackupService
 from backend.api.services.maintenance_service import MaintenanceService
 from backend.api.services.hook_service import HookService
 from backend.api.services.replication_service import ReplicationService
+from backend.api.services.audit_service import AuditService
 
 router = APIRouter(prefix="/operations", tags=["Operations & DR"])
 
@@ -131,11 +134,11 @@ def trigger_backup(
     db: Session = Depends(get_db)
 ):
     client_ip = request.client.host if request.client else "127.0.0.1"
-    try:
-        repo = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repo:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository {repo_id} not found")
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Repository {repo_id} not found")
 
+    try:
         return BackupService.execute_single_backup(
             db,
             repo=repo,
@@ -148,10 +151,46 @@ def trigger_backup(
             actor="admin",
             client_ip=client_ip
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        err_msg = str(e)
+        tb = traceback.format_exc()
+        now = datetime.now(timezone.utc)
+        notif = Notification(
+            repository_id=repo.id,
+            repository_name=repo.name,
+            revision=None,
+            author="admin",
+            action_type="backup_failed",
+            summary=f"Manual Backup of '{repo.name}' Failed: {err_msg}"[:500],
+            message=(
+                f"Manual backup execution for repository '{repo.name}' failed.\n"
+                f"Backup Type: {req.backup_type or 'hotcopy_full'}\n"
+                f"Error: {err_msg}\n\n"
+                f"=== Diagnostic Traceback ===\n{tb}"
+            ),
+            is_read=False,
+            created_at=now
+        )
+        db.add(notif)
+        try:
+            AuditService.log_event(
+                db,
+                actor="admin",
+                action_category="operational",
+                action_name="manual_backup_failed",
+                target_type="repository",
+                target_id=str(repo.id),
+                details={"error": err_msg, "backup_type": req.backup_type or "hotcopy_full", "traceback": tb},
+                client_ip=client_ip
+            )
+        except Exception:
+            pass
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 @router.get("/backup/archives", summary="List backup archives")
 def list_backup_archives(repo_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
@@ -186,11 +225,42 @@ def verify_backup_archive(
     db: Session = Depends(get_db)
 ):
     try:
-        return BackupService.verify_backup(db, archive_id, passphrase)
+        res = BackupService.verify_backup(db, archive_id, passphrase)
+        if res.status == "failed":
+            now = datetime.now(timezone.utc)
+            notif = Notification(
+                repository_id=None,
+                repository_name=f"Archive #{archive_id}",
+                revision=None,
+                author="admin",
+                action_type="verification_failed",
+                summary=f"Verification Failed for Archive #{archive_id}",
+                message=f"Archive #{archive_id} failed sandbox verification:\n\n{res.log_output}",
+                is_read=False,
+                created_at=now
+            )
+            db.add(notif)
+            db.commit()
+        return res
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        err_msg = str(e)
+        now = datetime.now(timezone.utc)
+        notif = Notification(
+            repository_id=None,
+            repository_name=f"Archive #{archive_id}",
+            revision=None,
+            author="admin",
+            action_type="verification_failed",
+            summary=f"Verification Failed for Archive #{archive_id}: {err_msg}"[:500],
+            message=f"Archive #{archive_id} verification threw an error:\n{err_msg}\n\n=== Diagnostic Traceback ===\n{traceback.format_exc()}",
+            is_read=False,
+            created_at=now
+        )
+        db.add(notif)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 @router.post("/backup/restore/{archive_id}", summary="Point-in-time Restore from Backup")
 def restore_backup_archive(
@@ -207,9 +277,57 @@ def restore_backup_archive(
             passphrase=req.encryption_passphrase
         )
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        err_msg = str(e)
+        now = datetime.now(timezone.utc)
+        notif = Notification(
+            repository_id=None,
+            repository_name=req.target_repository_name or f"Archive #{archive_id}",
+            revision=None,
+            author="admin",
+            action_type="restore_failed",
+            summary=f"Restore Failed: {err_msg}"[:500],
+            message=f"Restore operation for '{req.target_repository_name}' from archive #{archive_id} failed:\n{err_msg}",
+            is_read=False,
+            created_at=now
+        )
+        db.add(notif)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        err_msg = str(e)
+        tb = traceback.format_exc()
+        now = datetime.now(timezone.utc)
+        notif = Notification(
+            repository_id=None,
+            repository_name=req.target_repository_name or f"Archive #{archive_id}",
+            revision=None,
+            author="admin",
+            action_type="restore_failed",
+            summary=f"Restore Failed: {err_msg}"[:500],
+            message=(
+                f"Restore operation for '{req.target_repository_name}' from archive #{archive_id} failed.\n"
+                f"Error: {err_msg}\n\n"
+                f"=== Diagnostic Traceback ===\n{tb}"
+            ),
+            is_read=False,
+            created_at=now
+        )
+        db.add(notif)
+        try:
+            AuditService.log_event(
+                db,
+                actor="admin",
+                action_category="operational",
+                action_name="restore_failed",
+                target_type="repository",
+                target_id=req.target_repository_name,
+                details={"archive_id": archive_id, "error": err_msg, "traceback": tb},
+                client_ip="127.0.0.1"
+            )
+        except Exception:
+            pass
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 # --- Repository Maintenance & Optimization Tools ---
 
@@ -247,11 +365,42 @@ def verify_repository_health(
     if not repo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found.")
     try:
-        return MaintenanceService.verify_repository(repo.fs_path, req.start_revision, req.end_revision)
+        res = MaintenanceService.verify_repository(repo.fs_path, req.start_revision, req.end_revision)
+        if not res.get("is_valid", False):
+            now = datetime.now(timezone.utc)
+            notif = Notification(
+                repository_id=repo.id,
+                repository_name=repo.name,
+                revision=None,
+                author="system",
+                action_type="maintenance_verify_failed",
+                summary=f"Repository Health Check FAILED for '{repo.name}'",
+                message=f"Live svnadmin verify inspection detected repository errors for '{repo.name}':\n\n{res.get('log_output') or 'Corruption detected during svnadmin verify.'}",
+                is_read=False,
+                created_at=now
+            )
+            db.add(notif)
+            db.commit()
+        return res
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        err_msg = str(e)
+        now = datetime.now(timezone.utc)
+        notif = Notification(
+            repository_id=repo.id,
+            repository_name=repo.name,
+            revision=None,
+            author="system",
+            action_type="maintenance_verify_failed",
+            summary=f"Health Check Exception for '{repo.name}': {err_msg}"[:500],
+            message=f"Live svnadmin verify inspection threw an error for '{repo.name}':\n{err_msg}\n\n=== Diagnostic Traceback ===\n{traceback.format_exc()}",
+            is_read=False,
+            created_at=now
+        )
+        db.add(notif)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 @router.get("/maintenance/storage-stats", summary="Get detailed storage breakdown across all repositories")
 def get_storage_stats(db: Session = Depends(get_db)):
@@ -262,9 +411,63 @@ def get_storage_stats(db: Session = Depends(get_db)):
 
 # --- Pre-Packaged Hook Engine ---
 
+@router.get("/hooks/all/{hook_name}", response_model=HookConfigResponse, summary="Get global hook configuration for all repositories")
+def get_all_hooks_config(hook_name: str, db: Session = Depends(get_db)):
+    cfg = db.query(HookConfig).filter(HookConfig.hook_name == hook_name).first()
+    if cfg:
+        return HookConfigResponse(
+            id=0,
+            repository_id=0,
+            hook_name=cfg.hook_name,
+            is_enabled=cfg.is_enabled,
+            check_commit_message=cfg.check_commit_message,
+            commit_message_pattern=cfg.commit_message_pattern,
+            commit_message_error_msg=cfg.commit_message_error_msg,
+            check_pathnames=cfg.check_pathnames,
+            disallow_spaces=cfg.disallow_spaces,
+            disallow_special_chars=cfg.disallow_special_chars,
+            email_notifications=cfg.email_notifications,
+            email_recipients=cfg.email_recipients,
+            email_smtp_server=cfg.email_smtp_server,
+            webhook_enabled=cfg.webhook_enabled,
+            webhook_url=cfg.webhook_url,
+            updated_at=cfg.updated_at
+        )
+    return HookConfigResponse(
+        id=0,
+        repository_id=0,
+        hook_name=hook_name,
+        is_enabled=False,
+        check_commit_message=False,
+        commit_message_pattern=r"^.{10,}",
+        commit_message_error_msg="Commit message must be at least 10 characters.",
+        check_pathnames=False,
+        disallow_spaces=False,
+        disallow_special_chars=True,
+        email_notifications=False,
+        webhook_enabled=False
+    )
+
+@router.put("/hooks/all/{hook_name}", response_model=HookConfigResponse, summary="Apply hook configuration to all repositories")
+def update_all_hooks_config(
+    hook_name: str,
+    req: HookConfigUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        return HookService.update_all_configs(db, hook_name, req)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 @router.get("/hooks/{repo_id}/{hook_name}", response_model=HookConfigResponse, summary="Get hook configuration")
-def get_hook_config(repo_id: int, hook_name: str, db: Session = Depends(get_db)):
-    cfg = HookService.get_or_create_config(db, repo_id, hook_name)
+def get_hook_config(repo_id: str, hook_name: str, db: Session = Depends(get_db)):
+    if repo_id == "all":
+        return get_all_hooks_config(hook_name, db)
+    try:
+        r_id = int(repo_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid repository ID '{repo_id}'")
+    cfg = HookService.get_or_create_config(db, r_id, hook_name)
     return HookConfigResponse(
         id=cfg.id,
         repository_id=cfg.repository_id,
@@ -286,13 +489,16 @@ def get_hook_config(repo_id: int, hook_name: str, db: Session = Depends(get_db))
 
 @router.put("/hooks/{repo_id}/{hook_name}", response_model=HookConfigResponse, summary="Update hook configuration")
 def update_hook_config(
-    repo_id: int,
+    repo_id: str,
     hook_name: str,
     req: HookConfigUpdateRequest,
     db: Session = Depends(get_db)
 ):
+    if repo_id == "all":
+        return HookService.update_all_configs(db, hook_name, req)
     try:
-        return HookService.update_config(db, repo_id, hook_name, req)
+        r_id = int(repo_id)
+        return HookService.update_config(db, r_id, hook_name, req)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

@@ -128,7 +128,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             </li>
             <li style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ color: 'var(--text-muted)' }}>Subversion Core:</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{status?.version || '1.16.13 (Subversion 1.16.13)'}</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{status?.version || '1.16.16 (Subversion 1.16.16)'}</span>
             </li>
             <li style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ color: 'var(--text-muted)' }}>Metadata Store:</span>

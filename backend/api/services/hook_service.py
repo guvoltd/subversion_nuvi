@@ -10,16 +10,20 @@ import os
 import stat
 import json
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from backend.api.models.schema import Repository, HookConfig
 from backend.api.models.dto import HookConfigUpdateRequest, HookConfigResponse
 from backend.api.services.audit_service import AuditService
+from backend.api.services.repo_service import RepositoryService
 
 PRE_COMMIT_SCRIPT_TEMPLATE = """#!/usr/bin/env python3
+import os
 import sys
 import subprocess
+import json
 import re
 
 REPO_PATH = sys.argv[1]
@@ -27,8 +31,12 @@ TXN_NAME = sys.argv[2]
 
 CONFIG_FILE = "{config_path}"
 
+def get_log_message():
+    proc = subprocess.run(["svnlook", "log", "-t", TXN_NAME, REPO_PATH], capture_output=True, text=True)
+    return proc.stdout.strip()
+
 def get_svnlook_prop(prop_name):
-    proc = subprocess.run(["svnlook", "propget", "-t", TXN_NAME, REPO_PATH, prop_name], capture_output=True, text=True)
+    proc = subprocess.run(["svnlook", "propget", "--revprop", "-t", TXN_NAME, REPO_PATH, prop_name], capture_output=True, text=True)
     return proc.stdout.strip()
 
 def get_changed_paths():
@@ -52,7 +60,7 @@ def main():
 
     # 1. Commit message enforcement
     if cfg.get("check_commit_message", False):
-        log_msg = get_svnlook_prop("svn:log")
+        log_msg = get_log_message()
         pattern = cfg.get("commit_message_pattern", "^.{10,}")
         if not re.search(pattern, log_msg):
             err_msg = cfg.get("commit_message_error_msg", "Commit message does not satisfy policy.")
@@ -85,6 +93,7 @@ if __name__ == "__main__":
 """
 
 POST_COMMIT_SCRIPT_TEMPLATE = """#!/usr/bin/env python3
+import os
 import sys
 import subprocess
 import json
@@ -114,7 +123,6 @@ def get_commit_info():
     }
 
 def main():
-    import os
     if not os.path.exists(CONFIG_FILE):
         sys.exit(0)
 
@@ -160,8 +168,8 @@ class HookService:
                 hook_name=hook_name,
                 is_enabled=False,
                 check_commit_message=False,
-                commit_message_pattern=r"^.{10,}",
-                commit_message_error_msg="Commit message must be at least 10 characters.",
+                commit_message_pattern=r"^.{50,}",
+                commit_message_error_msg="Commit message must be at least 50 characters.",
                 check_pathnames=False,
                 disallow_spaces=False,
                 disallow_special_chars=True,
@@ -185,6 +193,14 @@ class HookService:
         if not repo:
             raise ValueError(f"Repository ID {repo_id} not found.")
 
+        repo_path = RepositoryService._resolve_repo_path(db, repo)
+        if repo.fs_path != str(repo_path):
+            repo.fs_path = str(repo_path)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
         cfg = HookService.get_or_create_config(db, repo_id, hook_name)
         cfg.is_enabled = req.is_enabled
         cfg.check_commit_message = req.check_commit_message
@@ -205,7 +221,7 @@ class HookService:
         db.refresh(cfg)
 
         # Synchronize physical script and JSON config in repo/hooks/
-        installed_path = HookService.install_hook_script(repo.fs_path, cfg)
+        installed_path = HookService.install_hook_script(str(repo_path), cfg)
 
         AuditService.log_event(
             db,
@@ -234,8 +250,106 @@ class HookService:
             webhook_enabled=cfg.webhook_enabled,
             webhook_url=cfg.webhook_url,
             installed_script_path=str(installed_path),
+            applied_repositories_count=1,
             updated_at=cfg.updated_at
         )
+
+    @staticmethod
+    def update_all_configs(
+        db: Session,
+        hook_name: str,
+        req: HookConfigUpdateRequest
+    ) -> HookConfigResponse:
+        """Applies and installs the given hook configuration across all repositories."""
+        repos = db.query(Repository).all()
+        last_cfg = None
+        last_installed_path = None
+        for repo in repos:
+            repo_path = RepositoryService._resolve_repo_path(db, repo)
+            if not repo_path or not os.path.exists(repo_path):
+                continue
+
+            if repo.fs_path != str(repo_path):
+                repo.fs_path = str(repo_path)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
+            cfg = HookService.get_or_create_config(db, repo.id, hook_name)
+            cfg.is_enabled = req.is_enabled
+            cfg.check_commit_message = req.check_commit_message
+            if req.commit_message_pattern:
+                cfg.commit_message_pattern = req.commit_message_pattern
+            if req.commit_message_error_msg:
+                cfg.commit_message_error_msg = req.commit_message_error_msg
+            cfg.check_pathnames = req.check_pathnames
+            cfg.disallow_spaces = req.disallow_spaces
+            cfg.disallow_special_chars = req.disallow_special_chars
+            cfg.email_notifications = req.email_notifications
+            cfg.email_recipients = req.email_recipients
+            cfg.email_smtp_server = req.email_smtp_server
+            cfg.webhook_enabled = req.webhook_enabled
+            cfg.webhook_url = req.webhook_url
+
+            db.commit()
+            db.refresh(cfg)
+
+            last_installed_path = HookService.install_hook_script(str(repo_path), cfg)
+            last_cfg = cfg
+
+        AuditService.log_event(
+            db,
+            actor="admin",
+            action_category="management",
+            action_name="update_all_hook_configurations",
+            target_type="repository_batch",
+            target_id="all",
+            details={"hook_name": hook_name, "is_enabled": req.is_enabled, "repositories_count": len(repos)}
+        )
+
+        return HookConfigResponse(
+            id=last_cfg.id if last_cfg else 0,
+            repository_id=0,
+            hook_name=hook_name,
+            is_enabled=req.is_enabled,
+            check_commit_message=req.check_commit_message,
+            commit_message_pattern=req.commit_message_pattern,
+            commit_message_error_msg=req.commit_message_error_msg,
+            check_pathnames=req.check_pathnames,
+            disallow_spaces=req.disallow_spaces,
+            disallow_special_chars=req.disallow_special_chars,
+            email_notifications=req.email_notifications,
+            email_recipients=req.email_recipients,
+            email_smtp_server=req.email_smtp_server,
+            webhook_enabled=req.webhook_enabled,
+            webhook_url=req.webhook_url,
+            installed_script_path=str(last_installed_path) if last_installed_path else None,
+            applied_repositories_count=len(repos),
+            updated_at=datetime.now(timezone.utc)
+        )
+
+    @staticmethod
+    def heal_installed_hooks(db: Session) -> int:
+        """Auto-heals installed hook scripts across repositories to ensure templates are up-to-date and bug-free."""
+        repos = db.query(Repository).all()
+        healed = 0
+        for repo in repos:
+            repo_path = RepositoryService._resolve_repo_path(db, repo)
+            hooks_dir = Path(repo_path) / "hooks"
+            if not hooks_dir.exists():
+                continue
+            for h_name in ["pre-commit", "post-commit"]:
+                script_file = hooks_dir / h_name
+                if script_file.exists():
+                    cfg = db.query(HookConfig).filter(
+                        HookConfig.repository_id == repo.id,
+                        HookConfig.hook_name == h_name
+                    ).first()
+                    if cfg:
+                        HookService.install_hook_script(str(repo_path), cfg)
+                        healed += 1
+        return healed
 
     @staticmethod
     def install_hook_script(repo_fs_path: str, cfg: HookConfig) -> Path:

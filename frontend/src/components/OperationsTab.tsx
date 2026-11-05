@@ -57,7 +57,8 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
     }
   }, [initialSubTab]);
 
-  const [selectedRepoId, setSelectedRepoId] = useState<number | ''>(repositories.length > 0 ? repositories[0].id : '');
+  const [selectedRepoId, setSelectedRepoId] = useState<number | 'all' | ''>(repositories.length > 0 ? repositories[0].id : 'all');
+  const [applyToAll, setApplyToAll] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -115,8 +116,8 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
   const [hookConfig, setHookConfig] = useState<any>({
     is_enabled: true,
     check_commit_message: true,
-    commit_message_pattern: '^.{10,}',
-    commit_message_error_msg: 'Commit message must be at least 10 characters long.',
+    commit_message_pattern: '^.{50,}',
+    commit_message_error_msg: 'Commit message must be at least 50 characters long.',
     check_pathnames: true,
     disallow_spaces: false,
     disallow_special_chars: true,
@@ -149,12 +150,15 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
         const stats = await api.getStorageStats();
         setStorageStats(stats);
       } else if (activeSubTab === 'hooks') {
-        if (selectedRepoId) {
+        if (selectedRepoId === 'all') {
+          const hConfig = await api.getHookConfig('all', hookType);
+          setHookConfig(hConfig);
+        } else if (selectedRepoId) {
           const hConfig = await api.getHookConfig(Number(selectedRepoId), hookType);
           setHookConfig(hConfig);
         }
       } else if (activeSubTab === 'replication') {
-        if (selectedRepoId) {
+        if (selectedRepoId && selectedRepoId !== 'all') {
           const rep = await api.getReplicationStatus(Number(selectedRepoId));
           setReplicationNode(rep);
           setMasterUrl(rep.master_url || '');
@@ -168,6 +172,12 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activeSubTab !== 'hooks' && selectedRepoId === 'all') {
+      setSelectedRepoId(repositories.length > 0 ? repositories[0].id : '');
+    }
+  }, [activeSubTab, repositories, selectedRepoId]);
 
   useEffect(() => {
     loadData();
@@ -452,8 +462,21 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
     if (!selectedRepoId) return;
     setLoading(true);
     try {
-      await api.updateHookConfig(Number(selectedRepoId), hookType, hookConfig);
-      setNotification({ type: 'success', message: `Pre-packaged ${hookType} hook installed and active.` });
+      if (selectedRepoId === 'all' || applyToAll) {
+        const res = await api.updateHookConfig('all', hookType, hookConfig);
+        const count = res.applied_repositories_count ?? repositories.length;
+        setNotification({
+          type: 'success',
+          message: `Pre-packaged ${hookType} hook successfully installed and active across ALL (${count}) repositories.`
+        });
+      } else {
+        await api.updateHookConfig(Number(selectedRepoId), hookType, hookConfig);
+        const repoName = repositories.find(r => r.id === selectedRepoId)?.name || `ID #${selectedRepoId}`;
+        setNotification({
+          type: 'success',
+          message: `Pre-packaged ${hookType} hook installed and active for repository '${repoName}'.`
+        });
+      }
       await loadData();
     } catch (err: any) {
       setNotification({ type: 'error', message: err.message });
@@ -533,10 +556,13 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
               <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>Target Repository:</span>
               <select
                 className="form-control"
-                style={{ width: '220px', height: '36px' }}
+                style={{ width: '240px', height: '36px' }}
                 value={selectedRepoId}
-                onChange={(e) => setSelectedRepoId(Number(e.target.value))}
+                onChange={(e) => setSelectedRepoId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
               >
+                {activeSubTab === 'hooks' && (
+                  <option value="all">Apply Hook to All Repos.</option>
+                )}
                 {repositories.map(r => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
@@ -552,10 +578,13 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>Target Repository:</span>
           <select
             className="input"
-            style={{ width: '220px', height: '36px' }}
+            style={{ width: '240px', height: '36px' }}
             value={selectedRepoId}
-            onChange={(e) => setSelectedRepoId(Number(e.target.value))}
+            onChange={(e) => setSelectedRepoId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
           >
+            {activeSubTab === 'hooks' && (
+              <option value="all">Apply Hook to All Repos.</option>
+            )}
             {repositories.map(r => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
@@ -1670,6 +1699,28 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
             </div>
           </div>
 
+          {selectedRepoId === 'all' && (
+            <div
+              style={{
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '6px',
+                padding: '0.65rem 0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+                color: '#93c5fd',
+                marginBottom: '1.25rem'
+              }}
+            >
+              <Globe size={16} color="#60a5fa" />
+              <span>
+                <strong>Apply Hook to All Repos:</strong> Saving this configuration will update and compile the <code>{hookType}</code> policy script across all {repositories.length} repositories.
+              </span>
+            </div>
+          )}
+
           {hookType === 'pre-commit' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1750,9 +1801,28 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                 </div>
               </div>
 
-              <button className="btn btn-primary" style={{ width: '240px' }} onClick={handleSaveHooks} disabled={loading}>
-                Save & Install pre-commit Hook
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ minWidth: '240px' }}
+                  onClick={handleSaveHooks}
+                  disabled={loading}
+                >
+                  {selectedRepoId === 'all' || applyToAll
+                    ? `Save & Apply pre-commit Hook to All Repos`
+                    : `Save & Install pre-commit Hook`}
+                </button>
+                {selectedRepoId !== 'all' && (
+                  <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', margin: 0, color: 'var(--text-muted)' }}>
+                    <input
+                      type="checkbox"
+                      checked={applyToAll}
+                      onChange={(e) => setApplyToAll(e.target.checked)}
+                    />
+                    <span>Apply Hook to All Repos.</span>
+                  </label>
+                )}
+              </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -1778,9 +1848,28 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                 </div>
               </div>
 
-              <button className="btn btn-primary" style={{ width: '240px' }} onClick={handleSaveHooks} disabled={loading}>
-                Save & Install post-commit Hook
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ minWidth: '240px' }}
+                  onClick={handleSaveHooks}
+                  disabled={loading}
+                >
+                  {selectedRepoId === 'all' || applyToAll
+                    ? `Save & Apply post-commit Hook to All Repos`
+                    : `Save & Install post-commit Hook`}
+                </button>
+                {selectedRepoId !== 'all' && (
+                  <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', margin: 0, color: 'var(--text-muted)' }}>
+                    <input
+                      type="checkbox"
+                      checked={applyToAll}
+                      onChange={(e) => setApplyToAll(e.target.checked)}
+                    />
+                    <span>Apply Hook to All Repos.</span>
+                  </label>
+                )}
+              </div>
             </div>
           )}
         </div>

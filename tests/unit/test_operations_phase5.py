@@ -147,6 +147,8 @@ def test_pre_packaged_hook_engine():
         assert (installed_path.stat().st_mode & stat.S_IXUSR) != 0 # Executable
         with open(installed_path, "r") as f:
             content = f.read()
+            assert "import os" in content
+            assert "import json" in content
             assert "check_commit_message" in content
 
         # 2. Update post-commit hook with webhook
@@ -157,6 +159,34 @@ def test_pre_packaged_hook_engine():
         })
         assert post_res.status_code == 200
         assert post_res.json()["webhook_enabled"] is True
+
+        # Verify post-commit physical file has os imported
+        post_installed_path = Path(post_res.json()["installed_script_path"])
+        with open(post_installed_path, "r") as f:
+            post_content = f.read()
+            assert "import os" in post_content
+            assert "import json" in post_content
+
+        # 3. Test Apply Hook to All Repositories
+        all_res = client.put("/api/v1/operations/hooks/all/pre-commit", json={
+            "is_enabled": True,
+            "check_commit_message": True,
+            "commit_message_pattern": r"^.{10,}",
+            "commit_message_error_msg": "Commit message must be at least 10 characters.",
+            "check_pathnames": True,
+            "disallow_spaces": False,
+            "disallow_special_chars": True
+        })
+        assert all_res.status_code == 200
+        all_data = all_res.json()
+        assert all_data["is_enabled"] is True
+        assert all_data["applied_repositories_count"] is not None
+        assert all_data["applied_repositories_count"] >= 1
+
+        # Verify GET /api/v1/operations/hooks/all/pre-commit
+        get_all_res = client.get("/api/v1/operations/hooks/all/pre-commit")
+        assert get_all_res.status_code == 200
+        assert get_all_res.json()["hook_name"] == "pre-commit"
     finally:
         db.close()
 

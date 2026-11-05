@@ -112,7 +112,7 @@ class TransactionResponse(BaseModel):
 
 class ServerStatusResponse(BaseModel):
     server_name: str
-    version: str = "1.16.13 (Subversion 1.16.13)"
+    version: str = "1.16.16 (Subversion 1.16.16)"
     uptime_seconds: float
     uptime_formatted: Optional[str] = ""
     repositories_count: int
@@ -383,8 +383,8 @@ class BackupRestoreRequest(BaseModel):
 class HookConfigUpdateRequest(BaseModel):
     is_enabled: bool = True
     check_commit_message: bool = False
-    commit_message_pattern: Optional[str] = "^.{10,}"
-    commit_message_error_msg: Optional[str] = "Commit message must be at least 10 characters."
+    commit_message_pattern: Optional[str] = "^.{50,}"
+    commit_message_error_msg: Optional[str] = "Commit message must be at least 50 characters."
     check_pathnames: bool = False
     disallow_spaces: bool = False
     disallow_special_chars: bool = True
@@ -395,8 +395,8 @@ class HookConfigUpdateRequest(BaseModel):
     webhook_url: Optional[str] = None
 
 class HookConfigResponse(BaseModel):
-    id: int
-    repository_id: int
+    id: Optional[int] = 0
+    repository_id: Optional[int] = 0
     hook_name: str
     is_enabled: bool
     check_commit_message: bool
@@ -411,6 +411,7 @@ class HookConfigResponse(BaseModel):
     webhook_enabled: bool
     webhook_url: Optional[str] = None
     installed_script_path: Optional[str] = None
+    applied_repositories_count: Optional[int] = None
     updated_at: Optional[datetime] = None
 
 class ReplicationNodeCreateRequest(BaseModel):
@@ -481,6 +482,7 @@ class NotificationResponse(BaseModel):
 class NotificationListResponse(BaseModel):
     total: int
     unread_count: int
+    read_count: int = 0
     notifications: List[NotificationResponse]
 
 class UnreadCountResponse(BaseModel):

@@ -228,6 +228,7 @@ export interface AdminNotification {
 export interface NotificationListResponse {
   total: number;
   unread_count: number;
+  read_count?: number;
   notifications: AdminNotification[];
 }
 

@@ -4,6 +4,43 @@
 # To view an issue listed as (issue #XXXX), visit:
 #   https://subversion.apache.org/issue-XXXX
 
+Version 1.16.16
+(05 Nov 2026, based on Version 1.16.15)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.16
+
+ User-visible changes:
+  - Rich Failure Logging & Diagnostics for Backup & Maintenance Operations:
+    * Enhanced scheduled backup jobs (`BackupService.run_scheduled_job`) to capture and aggregate exact failure logs, exit codes, and stderr across all target repositories into the notification message instead of discarding errors.
+    * Added structured multi-section notification format with root cause analysis (`=== FAILURE ROOT CAUSE & DIAGNOSTICS ===`) and detailed per-repository failure breakdowns (`=== PER-REPOSITORY FAILURE BREAKDOWN ===`).
+    * Updated backup schedule job telemetry (`last_run_message`) and notification summaries to display the primary failure reason snippet for immediate visibility in the Backup Schedules table.
+    * Added comprehensive failure notification and audit log generation for manual backups, archive restores, archive verifications, and repository health checks.
+    * Added `NotificationService.enrich_legacy_failed_notifications` to retroactively enrich historical un-detailed failure notifications with diagnostic information and troubleshooting guidance.
+    * Updated Repository Updates & Notifications UI with red failure badges (`FAILURE REPORT`), danger-accented diagnostic output boxes, a one-click "Copy Error Log" action button, and an expandable/collapsible toggle for long diagnostic outputs.
+    * Added failure indicators and alert badges in Navbar notifications dropdown for immediate situational awareness.
+
+Version 1.16.15
+(26 Oct 2026, based on Version 1.16.14)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.15
+
+ User-visible changes:
+  - Security Hooks Bug Fix & Multi-Repository Bulk Policy Enforcement:
+    * Fixed pre-commit hook script runtime crash (`NameError: name 'os' is not defined`) by ensuring `import os` and `import json` are explicitly declared in the hook template.
+    * Added auto-healing engine `HookService.heal_installed_hooks` on daemon startup to seamlessly repair existing pre-commit / post-commit scripts in repository hooks directories.
+    * Added "Apply Hook to All Repos." option in the Target Repository selector within the Settings > Security Hooks page, enabling administrators to deploy pre-commit and post-commit policies globally across all repositories with one click.
+    * Added `PUT /api/v1/operations/hooks/all/{hook_name}` and `GET /api/v1/operations/hooks/all/{hook_name}` endpoints with audit logging for global bulk hook synchronization.
+
+Version 1.16.14
+(17 Oct 2026, based on Version 1.16.13)
+https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.14
+
+ User-visible changes:
+  - Repository Notification Synchronization & Count Fixes:
+    * Fixed notification count mismatch where top bar bell and list mode badges showed full history count (e.g. 520) rather than unread count.
+    * Added persistent cleared revision watermark (`ServerConfiguration`) so clearing read notifications permanently purges them and prevents resurrection from SVN log on subsequent sync cycles.
+    * Added `clear_all_notifications` endpoint and frontend "Clear All" action, resetting all notification counts (All, Unread, Read) to zero.
+    * Added `read_count` field to `NotificationListResponse` and synchronized tab counter pills across "All", "Unread", and "Read" status filters.
+    * Fixed repository name bleeding in commit details view by enforcing strict basename matching (`path.name == r.name`) during repository path resolution and dynamic name self-healing in `NotificationService`.
+
 Version 1.16.13
 (14 Oct 2026, based on Version 1.16.12)
 https://github.com/nuvi/subversion-nuvi/releases/tag/v1.16.13

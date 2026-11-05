@@ -49,13 +49,14 @@ def list_notifications(
         except Exception:
             pass
 
-    items, total, unread_count = NotificationService.get_notifications(
+    items, total, unread_count, read_count = NotificationService.get_notifications(
         db, is_read=is_read, repository_id=repository_id, limit=limit, offset=offset
     )
 
     return NotificationListResponse(
         total=total,
         unread_count=unread_count,
+        read_count=read_count,
         notifications=[NotificationResponse(**item) for item in items]
     )
 
@@ -192,6 +193,21 @@ def clear_read_notifications(
         "status": "success",
         "deleted_count": count,
         "message": f"Cleared {count} read notifications."
+    }
+
+
+@router.delete("/clear-all", summary="Clear all notifications (read and unread)")
+def clear_all_notifications(
+    request: Request,
+    repository_id: Optional[int] = Query(None, description="Optional repository ID filter"),
+    db: Session = Depends(get_db)
+):
+    _require_admin(request, db)
+    count = NotificationService.clear_all_notifications(db, repository_id)
+    return {
+        "status": "success",
+        "deleted_count": count,
+        "message": f"Cleared all {count} notifications."
     }
 
 

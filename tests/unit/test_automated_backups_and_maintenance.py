@@ -189,3 +189,114 @@ def test_maintenance_tools_pack_clean_verify_storage():
         assert "revs_size_bytes" in target_stat
     finally:
         db.close()
+
+
+def test_backup_failure_logging_and_notification_enrichment():
+    from backend.api.models.schema import Repository, AuditLog
+    from backend.api.services.notification_service import NotificationService
+
+    db = SessionLocal()
+    try:
+        uid = uuid.uuid4().hex[:6]
+        # 1. Create a repository with a non-existent filesystem path to force execution failure
+        bad_repo = Repository(
+            name=f"FailingRepo_{uid}",
+            description="Testing backup failure logging",
+            fs_path=f"/nonexistent/path/to/svn_{uid}",
+            latest_revision=5
+        )
+        db.add(bad_repo)
+        db.commit()
+        db.refresh(bad_repo)
+
+        # Create a scheduled job targeting this bad repository
+        job_name = f"failing-backup-job-{uid}"
+        job = BackupScheduleJob(
+            name=job_name,
+            repository_id=bad_repo.id,
+            backup_type="hotcopy_full",
+            schedule_frequency="daily",
+            schedule_time="02:00",
+            destination_path="/tmp/nuvi_test_backups",
+            is_enabled=True,
+            skip_if_unchanged=False
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        # 2. Run scheduled job and verify detailed failure diagnostics are logged
+        res = BackupService.run_scheduled_job(db, job.id, force=True, actor="test_runner")
+        assert res["status"] == "failed"
+        assert len(res["results"]) == 1
+        assert res["results"][0]["status"] == "failed"
+        assert "error" in res["results"][0]
+
+        # Verify Job state
+        db.refresh(job)
+        assert job.last_run_status == "failed"
+        assert "0 succeeded, 0 skipped, 1 failed" in job.last_run_message
+        assert "Error:" in job.last_run_message or "Reason:" in job.last_run_message
+
+        # Verify Notification record contains full failure diagnostics
+        notif = db.query(Notification).filter(
+            Notification.repository_name == job_name,
+            Notification.action_type == "backup_failed"
+        ).order_by(Notification.id.desc()).first()
+        assert notif is not None
+        assert "FAILED" in notif.summary
+        assert "=== FAILURE ROOT CAUSE & DIAGNOSTICS ===" in notif.message
+        assert "=== PER-REPOSITORY FAILURE BREAKDOWN ===" in notif.message
+        assert f"FailingRepo_{uid}" in notif.message
+        assert "does not exist on disk" in notif.message or "nonexistent" in notif.message
+
+        # Verify Audit Log entry
+        audit_event = db.query(AuditLog).filter(
+            AuditLog.action_name == "backup_job_failed",
+            AuditLog.target_id == str(job.id)
+        ).first()
+        assert audit_event is not None
+        assert audit_event.action_category == "operational"
+
+        # 3. Test Legacy Notification Enrichment
+        legacy_msg = "Scheduled execution of 'legacy-test-backup' finished with status: FAILED.\n0 succeeded, 0 skipped, 29 failed."
+        legacy_notif = Notification(
+            repository_name="legacy-test-backup",
+            action_type="backup_failed",
+            summary="Backup Job 'legacy-test-backup': 0 succeeded, 0 skipped, 29 failed.",
+            message=legacy_msg,
+            is_read=False
+        )
+        db.add(legacy_notif)
+        db.commit()
+        db.refresh(legacy_notif)
+
+        enriched = NotificationService.enrich_legacy_failed_notifications(db)
+        assert enriched >= 1
+        db.refresh(legacy_notif)
+        assert "=== DIAGNOSTIC FAILURE REPORT ===" in legacy_notif.message
+        assert "Troubleshooting & Diagnostics:" in legacy_notif.message
+
+        # 4. Test Manual Backup Failure API Endpoint
+        manual_fail_res = client.post(f"/api/v1/operations/backup/run/{bad_repo.id}", json={
+            "backup_type": "hotcopy_full",
+            "force": True
+        })
+        assert manual_fail_res.status_code == 500
+        manual_notif = db.query(Notification).filter(
+            Notification.repository_id == bad_repo.id,
+            Notification.action_type == "backup_failed"
+        ).order_by(Notification.id.desc()).first()
+        assert manual_notif is not None
+        assert "Manual Backup of" in manual_notif.summary
+        assert "=== Diagnostic Traceback ===" in manual_notif.message
+
+    finally:
+        try:
+            db.delete(job)
+            db.delete(bad_repo)
+            db.delete(legacy_notif)
+            db.commit()
+        except Exception:
+            pass
+        db.close()
